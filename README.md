@@ -1,37 +1,42 @@
-﻿# UrbanPulse AI
+# UrbanPulse AI
 
-## Português
+## PortuguÃªs
 
 ### Problema
-A demanda por bicicletas compartilhadas varia ao longo do dia e está associada a fatores temporais, sazonais e meteorológicos. Compreender esses padrões ajuda a contextualizar o planejamento operacional de um sistema de mobilidade urbana.
+A demanda por bicicletas compartilhadas varia ao longo do dia e estÃ¡ associada a fatores temporais, sazonais e meteorolÃ³gicos. Compreender esses padrÃµes ajuda a contextualizar o planejamento operacional de um sistema de mobilidade urbana.
 
 ### Objetivo
-Este projeto de portfólio tem como objetivo explorar a demanda horária por bicicletas compartilhadas e, em etapas futuras, avaliar abordagens de previsão com validação adequada para séries temporais. Nenhuma análise ou modelo foi implementado nesta etapa.
+Este projeto de portfÃ³lio tem como objetivo explorar a demanda horÃ¡ria por bicicletas compartilhadas e, em etapas futuras, avaliar abordagens de previsÃ£o com validaÃ§Ã£o adequada para sÃ©ries temporais.
 
 ### Fonte de dados
-Será utilizado o **Bike Sharing Dataset** da UCI Machine Learning Repository, que contém registros horários e diários do sistema Capital Bikeshare, em Washington, D.C., nos anos de 2011 e 2012. Consulte [docs/data_source.md](docs/data_source.md) para a fonte oficial, licença, citação e limitações.
+Utilizamos o **Bike Sharing Dataset** da UCI Machine Learning Repository. Consulte [docs/data_source.md](docs/data_source.md) para fonte oficial, licenÃ§a, citaÃ§Ã£o e limitaÃ§Ãµes.
 
-### Escopo inicial
-Esta etapa prepara a documentação e a estrutura do projeto. O foco futuro é o arquivo horário (`hour.csv`) e a variável de contagem total (`cnt`). O dataset original contém também `day.csv`; os dados ainda não foram baixados nem processados neste projeto.
+### IngestÃ£o
+Com Python 3.10 ou superior, instale o projeto em modo editÃ¡vel e execute o comando:
 
-Arquitetura inicial planejada:
+```bash
+python -m pip install -e .
+urbanpulse-ingest
+```
 
-- `data/raw/`: cópias locais, sem versionamento, dos dados originais.
-- `data/processed/`: dados derivados localmente, sem versionamento.
-- `notebooks/`: exploração e experimentos reproduzíveis.
-- `src/urbanpulse/`: código reutilizável de ingestão, validação e análise.
-- `tests/`: testes automatizados para o código reutilizável.
-- `reports/`: relatórios e artefatos de análise selecionados.
-- `docs/`: documentação do projeto e das fontes de dados.
+O comando baixa o arquivo horÃ¡rio oficial e extrai `hour.csv` sem transformar seus bytes em `data/raw/hour.csv`. Se o arquivo jÃ¡ existir, a ingestÃ£o nÃ£o faz outra requisiÃ§Ã£o. Para solicitar explicitamente uma atualizaÃ§Ã£o:
 
-### Roadmap
-1. Registrar a proveniência e obter os dados oficiais.
-2. Inspecionar esquema, qualidade, cobertura temporal e padrões descritivos.
-3. Definir uma divisão temporal e métricas de referência para previsão.
-4. Implementar e comparar modelos de referência e modelos candidatos.
-5. Documentar resultados, limitações e próximos passos.
+```bash
+urbanpulse-ingest --force
+```
 
-O roadmap é planejado; nenhuma dessas funcionalidades está sendo declarada como concluída nesta etapa.
+Um destino alternativo pode ser informado com `--output caminho/para/hour.csv`. O download requer conexÃ£o com a internet. A origem, o destino e o tamanho do CSV salvo sÃ£o registrados no log.
+
+### Arquitetura e roadmap
+- `data/raw/`: dados originais baixados localmente e ignorados pelo Git.
+- `data/processed/`: dados derivados localmente e ignorados pelo Git.
+- `src/urbanpulse/`: cÃ³digo reutilizÃ¡vel de ingestÃ£o e futuras anÃ¡lises.
+- `notebooks/`: exploraÃ§Ã£o e experimentos.
+- `tests/`: testes automatizados.
+- `reports/`: relatÃ³rios e artefatos selecionados.
+- `docs/`: documentaÃ§Ã£o.
+
+PrÃ³ximas etapas planejadas: validar os dados, explorar padrÃµes temporais, definir avaliaÃ§Ã£o temporal e entÃ£o comparar modelos de referÃªncia e candidatos. Limpeza, anÃ¡lise e previsÃ£o nÃ£o fazem parte da ingestÃ£o implementada aqui.
 
 ## English
 
@@ -39,29 +44,51 @@ O roadmap é planejado; nenhuma dessas funcionalidades está sendo declarada com
 Hourly bike-sharing demand varies throughout the day and is associated with temporal, seasonal, and weather factors. Understanding these patterns can inform operational planning for an urban mobility system.
 
 ### Goal
-This portfolio project aims to explore hourly bike-sharing demand and, in future stages, evaluate forecasting approaches using time-series-appropriate validation. No analysis or model has been implemented in this stage.
+This portfolio project aims to explore hourly bike-sharing demand and, in future stages, evaluate forecasting approaches using time-series-appropriate validation.
 
 ### Data source
-The project will use the UCI Machine Learning Repository's **Bike Sharing Dataset**, which contains hourly and daily records from the Capital Bikeshare system in Washington, D.C., during 2011 and 2012. See [docs/data_source.md](docs/data_source.md) for the official source, license, citation, and limitations.
+We use the UCI Machine Learning Repository **Bike Sharing Dataset**. See [docs/data_source.md](docs/data_source.md) for the official source, license, citation, and limitations.
 
-### Initial scope
-This stage prepares the project documentation and structure. Future work will focus on the hourly file (`hour.csv`) and its total-count target (`cnt`). The original dataset also includes `day.csv`; the data has not yet been downloaded or processed in this project.
+### Ingestion
+With Python 3.10 or later, install the project in editable mode and run:
 
-Planned initial architecture:
+```bash
+python -m pip install -e .
+urbanpulse-ingest
+```
 
-- `data/raw/`: local, untracked copies of the original data.
-- `data/processed/`: locally derived, untracked data.
-- `notebooks/`: exploration and reproducible experiments.
-- `src/urbanpulse/`: reusable ingestion, validation, and analysis code.
-- `tests/`: automated tests for reusable code.
-- `reports/`: selected analysis reports and artifacts.
-- `docs/`: project and data-source documentation.
+The command downloads the official hourly archive and extracts `hour.csv` without transforming its bytes into `data/raw/hour.csv`. If the file already exists, no new request is made. To explicitly refresh it, run:
 
-### Roadmap
-1. Record data provenance and obtain the official data.
-2. Inspect schema, quality, temporal coverage, and descriptive patterns.
-3. Define a temporal split and baseline forecasting metrics.
-4. Implement and compare baseline and candidate models.
-5. Document results, limitations, and next steps.
+```bash
+urbanpulse-ingest --force
+```
 
-This roadmap describes planned work; none of these capabilities is claimed as complete in this stage.
+Use `--output path/to/hour.csv` to choose another destination. Internet access is required. The log records the source, destination, and size of the saved CSV.
+
+### Architecture and roadmap
+- `data/raw/`: locally downloaded original data, ignored by Git.
+- `data/processed/`: locally derived data, ignored by Git.
+- `src/urbanpulse/`: reusable ingestion and future analysis code.
+- `notebooks/`: exploration and experiments.
+- `tests/`: automated tests.
+- `reports/`: selected reports and artifacts.
+- `docs/`: documentation.
+
+Planned next steps are data validation, temporal exploration, time-aware evaluation, and comparison of baseline and candidate models. Cleaning, analysis, and forecasting are outside this ingestion implementation.
+
+### ValidaÃ§Ã£o inicial dos dados
+Com o ambiente do projeto ativo e as dependÃªncias instaladas (`python -m pip install -e .`), valide o CSV original sem modificÃ¡-lo:
+
+```bash
+urbanpulse-validate
+```
+
+Para validar outro arquivo, use `urbanpulse-validate --input caminho/para/hour.csv`. Erros de esquema, dados ausentes, tipos/valores invÃ¡lidos ou inconsistÃªncias entre variÃ¡veis fazem o comando terminar com cÃ³digo diferente de zero. Linhas integralmente duplicadas e colunas adicionais sÃ£o avisos; identificadores `instant` repetidos sÃ£o erro. O relatÃ³rio mostra dimensÃµes, tipos, ausÃªncias, duplicatas, avisos e erros. As regras e limites estÃ£o descritos no cÃ³digo do validador.
+### Initial data validation
+With the project environment active and dependencies installed (`python -m pip install -e .`), validate the original CSV without modifying it:
+
+```bash
+urbanpulse-validate
+```
+
+To validate another file, run `urbanpulse-validate --input path/to/hour.csv`. Schema, missing-data, type, domain, and cross-field errors return a nonzero exit code. Fully duplicated rows and extra columns are warnings; repeated `instant` identifiers are errors. See [docs/data_validation.md](docs/data_validation.md) for the full criteria.
