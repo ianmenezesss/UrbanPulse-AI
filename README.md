@@ -76,6 +76,36 @@ Use `--output path/to/hour.csv` to choose another destination. Internet access i
 
 Planned next steps are data validation, temporal exploration, time-aware evaluation, and comparison of baseline and candidate models. Cleaning, analysis, and forecasting are outside this ingestion implementation.
 
+### Preparação dos dados
+Com o ambiente virtual ativo e as dependências instaladas, gere `data/processed/hour.parquet`:
+
+```bash
+urbanpulse-prepare
+```
+
+O comando valida o CSV antes de processá-lo, preserva as colunas originais, acrescenta `datetime` a partir de `dteday` e `hr`, ordena os registros cronologicamente e não remove linhas. Se o Parquet de destino já existir, a execução falha sem sobrescrevê-lo. Para substituí-lo explicitamente, use:
+
+```bash
+urbanpulse-prepare --force
+```
+
+Use `--input caminho/hour.csv` ou `--output caminho/hour.parquet` para indicar outros caminhos. O arquivo em `data/raw/` permanece inalterado.
+
+### Data preparation
+With the virtual environment active and project dependencies installed, create `data/processed/hour.parquet`:
+
+```bash
+urbanpulse-prepare
+```
+
+The command validates the CSV before processing, preserves all original columns, adds `datetime` from `dteday` and `hr`, sorts records chronologically, and removes no rows. If the destination Parquet already exists, the command fails without overwriting it. To explicitly replace it, run:
+
+```bash
+urbanpulse-prepare --force
+```
+
+Use `--input path/hour.csv` or `--output path/hour.parquet` to choose other paths. The file under `data/raw/` remains unchanged.
+
 ### ValidaÃ§Ã£o inicial dos dados
 Com o ambiente do projeto ativo e as dependÃªncias instaladas (`python -m pip install -e .`), valide o CSV original sem modificÃ¡-lo:
 
