@@ -142,3 +142,23 @@ urbanpulse-validate
 ```
 
 To validate another file, run `urbanpulse-validate --input path/to/hour.csv`. Schema, missing-data, type, domain, and cross-field errors return a nonzero exit code. Fully duplicated rows and extra columns are warnings; repeated `instant` identifiers are errors. See [docs/data_validation.md](docs/data_validation.md) for the full criteria.
+
+### Dashboard local
+Instale o extra opcional do dashboard no ambiente virtual e inicie o Streamlit na raiz do repositório:
+
+```bash
+python -m pip install -e ".[dashboard]"
+python -m streamlit run src/urbanpulse/dashboard.py
+```
+
+Abra o endereço local indicado pelo Streamlit (por padrão, `http://localhost:8501`). Os filtros de ano e tipo de dia atualizam todos os indicadores e gráficos. O filtro de dia segue `workingday` da UCI: dias não úteis incluem fins de semana e feriados. Se o Parquet não existir, gere-o antes com `urbanpulse-prepare`.
+
+### Local dashboard
+Install the optional dashboard extra in the project virtual environment, then start Streamlit from the repository root:
+
+```bash
+python -m pip install -e ".[dashboard]"
+python -m streamlit run src/urbanpulse/dashboard.py
+```
+
+Open the local URL printed by Streamlit (default: `http://localhost:8501`). Year and day-type filters update all indicators and charts. Day type follows UCI's `workingday` field: non-working days include weekends and holidays. If the Parquet file is missing, create it first with `urbanpulse-prepare`.

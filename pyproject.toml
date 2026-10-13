@@ -17,6 +17,10 @@ analysis = [
     "seaborn>=0.13",
     "jupyterlab>=4.0",
 ]
+dashboard = [
+    "streamlit>=1.51",
+    "plotly>=5.22",
+]
 
 [project.scripts]
 urbanpulse-ingest = "urbanpulse.ingest:main"
