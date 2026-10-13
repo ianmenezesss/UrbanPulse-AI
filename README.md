@@ -106,6 +106,26 @@ urbanpulse-prepare --force
 
 Use `--input path/hour.csv` or `--output path/hour.parquet` to choose other paths. The file under `data/raw/` remains unchanged.
 
+### EDA notebook
+Install the optional analysis dependencies in the project virtual environment and launch JupyterLab from the repository root:
+
+```bash
+python -m pip install -e ".[analysis]"
+python -m jupyter lab
+```
+
+Open `notebooks/01_exploratory_analysis.ipynb` and run the cells from top to bottom. The notebook reads `data/processed/hour.parquet`; if it is missing, first run `urbanpulse-prepare`. It does not write to either source dataset.
+
+### Notebook de EDA
+Instale as dependências opcionais de análise no ambiente virtual do projeto e inicie o JupyterLab na raiz do repositório:
+
+```bash
+python -m pip install -e ".[analysis]"
+python -m jupyter lab
+```
+
+Abra `notebooks/01_exploratory_analysis.ipynb` e execute as células de cima para baixo. O notebook lê `data/processed/hour.parquet`; se o arquivo não existir, execute primeiro `urbanpulse-prepare`. O notebook não grava nos datasets de origem.
+
 ### ValidaÃ§Ã£o inicial dos dados
 Com o ambiente do projeto ativo e as dependÃªncias instaladas (`python -m pip install -e .`), valide o CSV original sem modificÃ¡-lo:
 
