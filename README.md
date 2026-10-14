@@ -162,3 +162,23 @@ python -m streamlit run src/urbanpulse/dashboard.py
 ```
 
 Open the local URL printed by Streamlit (default: `http://localhost:8501`). Year and day-type filters update all indicators and charts. Day type follows UCI's `workingday` field: non-working days include weekends and holidays. If the Parquet file is missing, create it first with `urbanpulse-prepare`.
+
+### Baseline de Machine Learning
+Instale o extra opcional de ML no ambiente virtual do projeto e execute a avaliação a partir da raiz:
+
+```bash
+python -m pip install -e ".[ml]"
+urbanpulse-baseline
+```
+
+O módulo também pode ser executado com `python -m urbanpulse.ml.baseline` ou apontado para outro Parquet com `--input caminho/hour.parquet`. Os registros são ordenados por `datetime` e divididos cronologicamente em 80% para treino e 20% para teste, sem embaralhamento. São comparadas a média global de `cnt` no treino e a média de `cnt` no treino para a mesma hora do dia. Esta segunda referência usa apenas `datetime` do registro de teste para escolher a hora; todas as médias vêm exclusivamente do treino. `cnt` é o alvo, e `casual` e `registered` não são usados nas previsões. MAE e RMSE medem o erro em aluguéis por hora (quanto menores, melhor); R² compara a previsão com a variação observada (quanto maior, melhor, podendo ser negativo). Esse resultado é uma referência inicial, não uma avaliação de modelo avançado.
+
+### Machine learning baseline
+Install the optional ML extra in the project virtual environment and run the evaluation from the repository root:
+
+```bash
+python -m pip install -e ".[ml]"
+urbanpulse-baseline
+```
+
+You can also run `python -m urbanpulse.ml.baseline` or pass another Parquet file with `--input path/hour.parquet`. Rows are sorted by `datetime` and split chronologically into 80% training and 20% test, without shuffling. The evaluation compares the global training mean of `cnt` with the training mean of `cnt` for the same hour of day. The latter uses only a test row's `datetime` to select its hour; all means come exclusively from training. `cnt` is the target, while `casual` and `registered` are not used for predictions. MAE and RMSE measure error in rentals per hour (lower is better); R² compares predictions with observed variation (higher is better and can be negative). This is an initial reference, not an advanced model evaluation.

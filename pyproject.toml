@@ -21,11 +21,15 @@ dashboard = [
     "streamlit>=1.51",
     "plotly>=5.22",
 ]
+ml = [
+    "scikit-learn>=1.4",
+]
 
 [project.scripts]
 urbanpulse-ingest = "urbanpulse.ingest:main"
 urbanpulse-validate = "urbanpulse.validation:main"
 urbanpulse-prepare = "urbanpulse.prepare:main"
+urbanpulse-baseline = "urbanpulse.ml.baseline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
