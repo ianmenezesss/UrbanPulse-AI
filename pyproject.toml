@@ -30,6 +30,7 @@ urbanpulse-ingest = "urbanpulse.ingest:main"
 urbanpulse-validate = "urbanpulse.validation:main"
 urbanpulse-prepare = "urbanpulse.prepare:main"
 urbanpulse-baseline = "urbanpulse.ml.baseline:main"
+urbanpulse-ridge = "urbanpulse.ml.ridge:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

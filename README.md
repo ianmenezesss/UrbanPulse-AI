@@ -182,3 +182,43 @@ urbanpulse-baseline
 ```
 
 You can also run `python -m urbanpulse.ml.baseline` or pass another Parquet file with `--input path/hour.parquet`. Rows are sorted by `datetime` and split chronologically into 80% training and 20% test, without shuffling. The evaluation compares the global training mean of `cnt` with the training mean of `cnt` for the same hour of day. The latter uses only a test row's `datetime` to select its hour; all means come exclusively from training. `cnt` is the target, while `casual` and `registered` are not used for predictions. MAE and RMSE measure error in rentals per hour (lower is better); R² compares predictions with observed variation (higher is better and can be negative). This is an initial reference, not an advanced model evaluation.
+
+### Regressão Ridge
+Instale o extra opcional de ML e execute o modelo na raiz do projeto:
+
+```bash
+python -m pip install -e ".[ml]"
+urbanpulse-ridge
+```
+
+O Ridge usa o mesmo split cronológico 80/20 dos baselines e `alpha=1.0`, sem busca de hiperparâmetros. As features são variáveis de calendário e condições meteorológicas; `instant`, `casual`, `registered` e `cnt` são excluídas das entradas. Variáveis categóricas passam por `OneHotEncoder`; variáveis meteorológicas numéricas passam por `StandardScaler`. Ambos os transformadores são ajustados somente no treino. **O uso das condições meteorológicas pressupõe que previsões meteorológicas para a hora futura estejam disponíveis no momento da previsão.** Nesta primeira avaliação, os valores meteorológicos observados no dataset servem como representação dessas informações disponíveis; na aplicação real, usar observações futuras causaria vazamento e seria necessário fornecer previsões meteorológicas.
+
+Resultados obtidos neste split (13.903 linhas de treino; 3.476 de teste):
+
+| Abordagem | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Média global de treino | 174,9846 | 232,6084 | -0,1130 |
+| Média de treino por hora | 113,7316 | 167,3239 | 0,4241 |
+| Ridge (`alpha=1.0`) | 98,8691 | 133,9076 | 0,6311 |
+
+Neste holdout, Ridge apresentou os menores erros e o maior R² entre as três abordagens. Essa comparação corresponde a um único período de teste e não substitui validação temporal adicional.
+
+### Ridge regression
+Install the optional ML extra and run the model from the repository root:
+
+```bash
+python -m pip install -e ".[ml]"
+urbanpulse-ridge
+```
+
+Ridge uses the same chronological 80/20 split as the baselines and a fixed `alpha=1.0`, with no hyperparameter search. Predictors are calendar and weather variables; `instant`, `casual`, `registered`, and `cnt` are excluded from inputs. Categorical variables use `OneHotEncoder`; numeric weather variables use `StandardScaler`. Both transformers are fitted on training data only. **Using weather conditions assumes forecasts for the target future hour are available when the prediction is made.** In this initial evaluation, observed weather values in the dataset represent that available information; a real application must supply weather forecasts, since using future observations would leak information.
+
+Results on this split (13,903 training rows; 3,476 test rows):
+
+| Approach | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Global training mean | 174.9846 | 232.6084 | -0.1130 |
+| Training mean by hour | 113.7316 | 167.3239 | 0.4241 |
+| Ridge (`alpha=1.0`) | 98.8691 | 133.9076 | 0.6311 |
+
+On this holdout, Ridge had the lowest errors and highest R² among the three approaches. This comparison covers one test period and does not replace further temporal validation.
