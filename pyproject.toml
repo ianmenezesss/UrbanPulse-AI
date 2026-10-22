@@ -34,6 +34,7 @@ urbanpulse-baseline = "urbanpulse.ml.baseline:main"
 urbanpulse-ridge = "urbanpulse.ml.ridge:main"
 urbanpulse-random-forest = "urbanpulse.ml.random_forest:main"
 urbanpulse-temporal-validation = "urbanpulse.ml.temporal_validation:main"
+urbanpulse-model-comparison = "urbanpulse.ml.model_comparison:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

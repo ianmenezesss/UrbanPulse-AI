@@ -41,6 +41,9 @@ Thumbs.db
 !/reports/figures/
 /reports/figures/*
 !/reports/figures/temporal_validation_*.png
+!/reports/model_comparison/
+/reports/model_comparison/*
+!/reports/model_comparison/*.csv
 
 # Secrets and local environment configuration
 .env

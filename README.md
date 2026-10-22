@@ -326,3 +326,51 @@ Mean ± standard deviation across windows:
 Random Forest had lower MAE and RMSE and higher R² in all five windows, so it maintained an overall advantage over Ridge in this validation. The difference varied by hour: both models made larger errors during commute peaks, especially at 8 a.m. and between 5 p.m. and 6 p.m., although Random Forest reduced these errors substantially. By weekday, Random Forest had lower aggregate MAE on every day; Saturday had the largest errors for both models. Mean errors were negative, indicating demand underprediction, with stronger underprediction during peak hours. These metrics summarize only out-of-sample predictions within the initial 80%.
 
 Weather features assume forecasts are available for each future hour. Observed dataset values are only a proxy for this information; future weather observations must not be used in a real deployment.
+
+### Dashboard local
+Instale o extra do dashboard e o extra de ML (necessário para gerar o relatório do teste final) no ambiente virtual:
+
+    python -m pip install -e ".[dashboard,ml]"
+
+Para atualizar os relatórios que alimentam o painel, execute uma vez na raiz:
+
+    urbanpulse-model-comparison
+    urbanpulse-temporal-validation
+
+Inicie o Streamlit:
+
+    python -m streamlit run src/urbanpulse/dashboard.py
+
+Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral contém três áreas:
+
+- **Visão geral:** indicadores atuais e exploração da demanda; os filtros de ano e tipo de dia continuam disponíveis.
+- **Modelos de Machine Learning:** MAE, RMSE e R² dos quatro modelos no teste final reservado. Esse conjunto não é combinado com os resultados de validação.
+- **Validação temporal:** resultados de Ridge e Random Forest em cinco janelas nos 80% iniciais, com previsões fora da amostra, erros por hora e dia da semana.
+
+MAE e RMSE são erros em aluguéis por hora, então valores menores indicam previsões mais próximas; RMSE dá peso maior a erros grandes. R² compara a previsão com uma referência baseada na média e pode ser negativo. Na validação temporal, as curvas por janela mostram estabilidade entre períodos, pontos próximos à diagonal representam previsões próximas dos valores reais, e erro negativo indica subestimação. O painel apenas lê os relatórios: ele não treina modelos. Se os CSVs estiverem ausentes, as respectivas áreas mostram o comando para gerá-los.
+
+O uso de variáveis meteorológicas nos modelos pressupõe previsões disponíveis para cada hora futura. Em uma operação real, observações meteorológicas posteriores à hora prevista causariam vazamento.
+
+### Local dashboard
+Install the dashboard and ML extras in the project virtual environment (ML is needed to generate the final-test report):
+
+    python -m pip install -e ".[dashboard,ml]"
+
+To refresh the reports used by the dashboard, run once from the repository root:
+
+    urbanpulse-model-comparison
+    urbanpulse-temporal-validation
+
+Start Streamlit:
+
+    python -m streamlit run src/urbanpulse/dashboard.py
+
+Open the address printed in the terminal, usually http://localhost:8501. The sidebar has three areas:
+
+- **Overview:** existing demand indicators and exploration charts; year and day-type filters remain available.
+- **Machine learning models:** MAE, RMSE, and R² for all four models on the reserved final test set. This set is kept separate from validation results.
+- **Temporal validation:** Ridge and Random Forest results over five windows within the first 80%, with out-of-sample predictions and errors by hour and weekday.
+
+MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it.
+
+Weather predictors assume forecasts are available for each future hour. In a real deployment, weather observations from after the target hour would leak future information.
