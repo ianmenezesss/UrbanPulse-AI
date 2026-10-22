@@ -266,3 +266,63 @@ Results on the same chronological holdout (13,903 training rows; 3,476 test rows
 | Random Forest | 56.4021 | 84.6040 | 0.8528 |
 
 On this test period, Random Forest had the lowest errors and highest R² among the evaluated approaches. This result applies to one holdout and does not replace further temporal validation.
+
+### Validação temporal e análise de erros
+Com o extra opcional de ML instalado, execute na raiz do projeto:
+
+    urbanpulse-temporal-validation
+
+O processo ordena os dados por datetime e reserva os últimos 20% sem usá-los na análise. Nos 80% iniciais, usa cinco janelas progressivas: metade desses dados inicia o treino, e o restante é dividido em cinco blocos contíguos de validação. O treino aumenta a cada janela; todos os ajustes dos pipelines Ridge e Random Forest usam somente as linhas anteriores à respectiva janela. Não há busca de hiperparâmetros. MAE, RMSE e R² são calculados para cada modelo em cada bloco, e o resumo apresenta média e desvio padrão amostral das cinco janelas.
+
+Os CSVs são gravados em reports/temporal_validation/; os gráficos ficam em reports/figures/. O relatório inclui previsões fora da amostra, métricas por janela, resumo, erros por hora e erros por dia da semana. As opções --input, --report-dir e --figures-dir permitem alterar caminhos.
+
+Resultados por janela (treino/validação em linhas):
+
+| Janela | Linhas treino/validação | Ridge MAE | Ridge RMSE | Ridge R² | Random Forest MAE | Random Forest RMSE | Random Forest R² |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 6.951 / 1.391 | 52,9489 | 74,3539 | 0,6340 | 45,4891 | 67,3302 | 0,6999 |
+| 2 | 8.342 / 1.391 | 76,2816 | 97,2003 | 0,3259 | 60,5012 | 87,4975 | 0,4538 |
+| 3 | 9.733 / 1.390 | 81,3675 | 118,3897 | 0,6036 | 76,6517 | 112,5962 | 0,6414 |
+| 4 | 11.123 / 1.390 | 106,4210 | 134,5316 | 0,6177 | 54,4626 | 79,8866 | 0,8652 |
+| 5 | 12.513 / 1.390 | 107,4127 | 134,8470 | 0,6111 | 91,1505 | 123,0484 | 0,6762 |
+
+Média ± desvio padrão entre as janelas:
+
+| Modelo | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Ridge | 84,8863 ± 22,7904 | 111,8645 ± 26,0128 | 0,5584 ± 0,1305 |
+| Random Forest | 65,6510 ± 18,2307 | 94,0718 ± 23,1428 | 0,6673 ± 0,1471 |
+
+O Random Forest teve MAE e RMSE menores e R² maior nas cinco janelas, então manteve vantagem geral sobre o Ridge nesta validação. A diferença não foi uniforme por horário: ambos erraram mais nos picos de deslocamento, especialmente às 8h e entre 17h e 18h, embora o Random Forest tenha reduzido bastante esses erros. No agregado por dia, o erro absoluto médio do Random Forest foi menor em todos os dias; sábado apresentou os maiores erros para ambos. Os erros médios ficaram negativos, indicando subestimação da demanda, com maior subestimação em horários de pico. Essas métricas resumem apenas as previsões fora da amostra dentro dos 80% iniciais.
+
+As features meteorológicas pressupõem disponibilidade de previsões para cada hora futura. Os valores observados no dataset são apenas um proxy para essa informação; não use observações meteorológicas futuras em uma operação real.
+
+### Temporal validation and error analysis
+With the optional ML extra installed, run from the repository root:
+
+    urbanpulse-temporal-validation
+
+The process sorts records by datetime and reserves the final 20% without using them in this analysis. Within the first 80%, it uses five expanding windows: half of this development data forms the initial training set, and the remainder is split into five contiguous validation blocks. Training history grows at every window; Ridge and Random Forest pipelines are fitted only on rows before that window. No hyperparameter search is performed. MAE, RMSE, and R² are calculated for each model in each block; the summary reports the mean and sample standard deviation across the five windows.
+
+CSV files are written to reports/temporal_validation/; plots go to reports/figures/. The reports include out-of-sample predictions, per-window metrics, summary metrics, and errors by hour and weekday. The --input, --report-dir, and --figures-dir options can override the paths.
+
+Per-window results (training/validation rows):
+
+| Window | Train/validation rows | Ridge MAE | Ridge RMSE | Ridge R² | Random Forest MAE | Random Forest RMSE | Random Forest R² |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 6,951 / 1,391 | 52.9489 | 74.3539 | 0.6340 | 45.4891 | 67.3302 | 0.6999 |
+| 2 | 8,342 / 1,391 | 76.2816 | 97.2003 | 0.3259 | 60.5012 | 87.4975 | 0.4538 |
+| 3 | 9,733 / 1,390 | 81.3675 | 118.3897 | 0.6036 | 76.6517 | 112.5962 | 0.6414 |
+| 4 | 11,123 / 1,390 | 106.4210 | 134.5316 | 0.6177 | 54.4626 | 79.8866 | 0.8652 |
+| 5 | 12,513 / 1,390 | 107.4127 | 134.8470 | 0.6111 | 91.1505 | 123.0484 | 0.6762 |
+
+Mean ± standard deviation across windows:
+
+| Model | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Ridge | 84.8863 ± 22.7904 | 111.8645 ± 26.0128 | 0.5584 ± 0.1305 |
+| Random Forest | 65.6510 ± 18.2307 | 94.0718 ± 23.1428 | 0.6673 ± 0.1471 |
+
+Random Forest had lower MAE and RMSE and higher R² in all five windows, so it maintained an overall advantage over Ridge in this validation. The difference varied by hour: both models made larger errors during commute peaks, especially at 8 a.m. and between 5 p.m. and 6 p.m., although Random Forest reduced these errors substantially. By weekday, Random Forest had lower aggregate MAE on every day; Saturday had the largest errors for both models. Mean errors were negative, indicating demand underprediction, with stronger underprediction during peak hours. These metrics summarize only out-of-sample predictions within the initial 80%.
+
+Weather features assume forecasts are available for each future hour. Observed dataset values are only a proxy for this information; future weather observations must not be used in a real deployment.

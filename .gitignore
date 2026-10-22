@@ -35,6 +35,12 @@ Thumbs.db
 !/data/processed/.gitkeep
 /reports/*
 !/reports/.gitkeep
+!/reports/temporal_validation/
+/reports/temporal_validation/*
+!/reports/temporal_validation/*.csv
+!/reports/figures/
+/reports/figures/*
+!/reports/figures/temporal_validation_*.png
 
 # Secrets and local environment configuration
 .env

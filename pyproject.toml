@@ -22,6 +22,7 @@ dashboard = [
     "plotly>=5.22",
 ]
 ml = [
+    "matplotlib>=3.8",
     "scikit-learn>=1.4",
 ]
 
@@ -32,6 +33,7 @@ urbanpulse-prepare = "urbanpulse.prepare:main"
 urbanpulse-baseline = "urbanpulse.ml.baseline:main"
 urbanpulse-ridge = "urbanpulse.ml.ridge:main"
 urbanpulse-random-forest = "urbanpulse.ml.random_forest:main"
+urbanpulse-temporal-validation = "urbanpulse.ml.temporal_validation:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

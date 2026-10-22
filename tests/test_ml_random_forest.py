@@ -9,7 +9,6 @@ from sklearn.ensemble import RandomForestRegressor
 from urbanpulse.ml.baseline import temporal_train_test_split
 from urbanpulse.ml.random_forest import (
     CATEGORICAL_FEATURES,
-    FEATURE_COLUMNS,
     MIN_SAMPLES_LEAF,
     N_ESTIMATORS,
     N_JOBS,
@@ -20,6 +19,7 @@ from urbanpulse.ml.random_forest import (
     fit_predict_random_forest,
     select_features,
 )
+from urbanpulse.ml.ridge import FEATURE_COLUMNS
 
 
 def sample_frame(rows: int = 20) -> pd.DataFrame:
