@@ -31,6 +31,7 @@ urbanpulse-validate = "urbanpulse.validation:main"
 urbanpulse-prepare = "urbanpulse.prepare:main"
 urbanpulse-baseline = "urbanpulse.ml.baseline:main"
 urbanpulse-ridge = "urbanpulse.ml.ridge:main"
+urbanpulse-random-forest = "urbanpulse.ml.random_forest:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

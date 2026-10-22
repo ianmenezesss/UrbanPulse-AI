@@ -222,3 +222,47 @@ Results on this split (13,903 training rows; 3,476 test rows):
 | Ridge (`alpha=1.0`) | 98.8691 | 133.9076 | 0.6311 |
 
 On this holdout, Ridge had the lowest errors and highest R² among the three approaches. This comparison covers one test period and does not replace further temporal validation.
+
+### Random Forest Regressor
+Execute o novo modelo na raiz do projeto, com o extra `ml` instalado:
+
+```bash
+urbanpulse-random-forest
+```
+
+O Random Forest usa as mesmas features de calendário e meteorologia do Ridge e o mesmo split cronológico 80/20, sem embaralhamento. `instant`, `casual`, `registered` e `cnt` não são features. As categorias são codificadas com `OneHotEncoder`, ajustado somente no treino; as variáveis numéricas são mantidas sem escala, pois árvores não dependem da escala. Os parâmetros fixos são `n_estimators=100`, `min_samples_leaf=2`, `random_state=42` e `n_jobs=-1`: 100 árvores dão uma média de conjunto estável, folhas com pelo menos duas observações limitam árvores excessivamente específicas, a semente permite reproduzir a amostragem e `n_jobs=-1` usa os processadores disponíveis. Não houve otimização de hiperparâmetros.
+
+Assim como no Ridge, as condições meteorológicas pressupõem que previsões para a hora futura estejam disponíveis no momento da previsão. O dataset fornece observações meteorológicas históricas como proxy; na aplicação real, devem ser usadas previsões, nunca condições observadas após a hora prevista.
+
+Resultados no mesmo holdout cronológico (13.903 linhas de treino; 3.476 de teste):
+
+| Abordagem | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Média global de treino | 174,9846 | 232,6084 | -0,1130 |
+| Média de treino por hora | 113,7316 | 167,3239 | 0,4241 |
+| Ridge (`alpha=1.0`) | 98,8691 | 133,9076 | 0,6311 |
+| Random Forest | 56,4021 | 84,6040 | 0,8528 |
+
+Neste período de teste, o Random Forest teve os menores erros e o maior R² entre as abordagens avaliadas. O resultado vale para esse único holdout e não substitui validação temporal adicional.
+
+### Random Forest Regressor
+Run the new model from the repository root with the `ml` extra installed:
+
+```bash
+urbanpulse-random-forest
+```
+
+Random Forest uses the same calendar and weather features as Ridge and the same chronological 80/20 split, without shuffling. `instant`, `casual`, `registered`, and `cnt` are excluded from features. Categories are encoded with `OneHotEncoder`, fitted on training data only; numeric variables remain unscaled because trees do not depend on feature scale. Fixed parameters are `n_estimators=100`, `min_samples_leaf=2`, `random_state=42`, and `n_jobs=-1`: 100 trees provide a stable ensemble average, a minimum leaf size of two limits overly specific trees, the seed makes sampling reproducible, and `n_jobs=-1` uses available processors. No hyperparameter search was performed.
+
+As with Ridge, weather conditions assume forecasts for the future hour are available at prediction time. The dataset's historical weather observations serve as a proxy; a real application must use forecasts, never conditions observed after the target hour.
+
+Results on the same chronological holdout (13,903 training rows; 3,476 test rows):
+
+| Approach | MAE | RMSE | R² |
+| --- | ---: | ---: | ---: |
+| Global training mean | 174.9846 | 232.6084 | -0.1130 |
+| Training mean by hour | 113.7316 | 167.3239 | 0.4241 |
+| Ridge (`alpha=1.0`) | 98.8691 | 133.9076 | 0.6311 |
+| Random Forest | 56.4021 | 84.6040 | 0.8528 |
+
+On this test period, Random Forest had the lowest errors and highest R² among the evaluated approaches. This result applies to one holdout and does not replace further temporal validation.
