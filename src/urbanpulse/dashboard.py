@@ -37,6 +37,13 @@ MODEL_LABELS = {
     "random_forest": "Random Forest",
 }
 TEMPORAL_MODEL_ORDER = ["Ridge", "Random Forest"]
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "random_forest.joblib"
+WEATHER_SITUATIONS = {
+    "1 · Céu limpo ou poucas nuvens": 1,
+    "2 · Névoa ou céu parcialmente nublado": 2,
+    "3 · Chuva ou neve leve": 3,
+    "4 · Chuva forte, neve ou neblina intensa": 4,
+}
 
 
 @st.cache_data(show_spinner="Carregando os dados processados…", ttl="10m")
@@ -76,6 +83,15 @@ def load_temporal_reports(
     """Cache the existing temporal validation report tables."""
     _ = modified_times
     return load_temporal_validation_reports(Path(path))
+
+
+@st.cache_resource(show_spinner="Carregando o modelo salvo…")
+def load_cached_simulator_model(path: str, modified_time_ns: int):
+    """Cache the fitted model artifact; this function never trains a model."""
+    _ = modified_time_ns
+    from urbanpulse.simulator import load_simulator_model
+
+    return load_simulator_model(Path(path))
 
 
 def _style_figure(figure: Figure, *, height: int | None = None) -> Figure:
@@ -506,6 +522,81 @@ def _show_temporal_validation() -> None:
     _show_metric_explanations()
 
 
+def _show_simulator() -> None:
+    st.markdown("## Simulador de demanda")
+    st.markdown(
+        "Configure uma hora e condições informadas para estimar a quantidade de aluguéis "
+        "com o Random Forest já treinado."
+    )
+    if not DEFAULT_MODEL_PATH.is_file():
+        st.warning("O modelo do simulador ainda não foi gerado.")
+        st.markdown("Na raiz do projeto, instale as dependências de ML e gere o artefato:")
+        st.code('python -m pip install -e ".[ml,dashboard]"\nurbanpulse-train-random-forest', language="bash")
+        return
+
+    st.info(
+        "Esta é uma simulação baseada em padrões históricos e nas condições informadas. "
+        "O painel não consulta previsões meteorológicas em tempo real."
+    )
+    with st.form("demand_simulator_form"):
+        date_col, hour_col = st.columns(2)
+        with date_col:
+            scenario_date = st.date_input(
+                "Data do cenário (modelo treinado com 2011–2012)",
+                value=pd.Timestamp("2012-06-15").date(),
+                min_value=pd.Timestamp("2011-01-01").date(),
+                max_value=pd.Timestamp("2012-12-31").date(),
+            )
+            holiday = st.checkbox("Marcar como feriado", value=False)
+        with hour_col:
+            hour = st.slider("Hora do dia", min_value=0, max_value=23, value=8, format="%d:00")
+            weather_label = st.selectbox("Condição do tempo (categoria UCI)", list(WEATHER_SITUATIONS))
+
+        st.markdown("### Condições meteorológicas")
+        temp_col, atemp_col = st.columns(2)
+        with temp_col:
+            temperature = st.slider("Temperatura do ar (°C)", -8.0, 39.0, 20.0, 0.5)
+            humidity = st.slider("Umidade relativa (%)", 0.0, 100.0, 60.0, 1.0)
+        with atemp_col:
+            apparent_temperature = st.slider("Sensação térmica (°C)", -16.0, 50.0, 22.0, 0.5)
+            wind = st.slider("Velocidade do vento (escala original UCI)", 0.0, 67.0, 15.0, 1.0)
+        submitted = st.form_submit_button("Simular demanda", type="primary")
+
+    with st.expander("Como as unidades são representadas no modelo"):
+        st.markdown(
+            "A UCI normaliza a temperatura como `(°C + 8) / 47`, a sensação térmica como "
+            "`(°C + 16) / 66`, a umidade como `% / 100` e o vento como `escala UCI / 67`. "
+            "A documentação da UCI não especifica unidade física para o vento; por isso o controle "
+            "usa a escala anterior à normalização. Estação, ano, mês, dia da semana, dia útil e hora "
+            "são derivados da data e do horário. O feriado e a categoria meteorológica são informados."
+        )
+
+    if not submitted:
+        return
+    try:
+        from urbanpulse.simulator import build_scenario_features, predict_hourly_demand
+
+        model = load_cached_simulator_model(
+            str(DEFAULT_MODEL_PATH), DEFAULT_MODEL_PATH.stat().st_mtime_ns
+        )
+        features = build_scenario_features(
+            scenario_date,
+            hour,
+            temperature_c=temperature,
+            apparent_temperature_c=apparent_temperature,
+            humidity_percent=humidity,
+            wind_speed_dataset_units=wind,
+            weathersit=WEATHER_SITUATIONS[weather_label],
+            holiday=holiday,
+        )
+        prediction = predict_hourly_demand(model, features)
+    except (OSError, ValueError) as exc:
+        st.error(f"Não foi possível gerar a estimativa: {exc}")
+        return
+    st.metric("Demanda estimada", f"{prediction:,.0f}".replace(",", "."), "aluguéis na hora selecionada")
+    st.caption("A estimativa é condicionada às entradas acima e não representa uma previsão meteorológica real.")
+
+
 def main() -> None:
     st.markdown(
         """
@@ -526,10 +617,11 @@ def main() -> None:
     st.sidebar.markdown("## UrbanPulse AI")
     page = st.sidebar.radio(
         "Navegação",
-        ["Visão geral", "Modelos de Machine Learning", "Validação temporal"],
+        ["Visão geral", "Modelos de Machine Learning", "Validação temporal", "Simulador de demanda"],
         label_visibility="collapsed",
     )
     subtitles = {
+        "Simulador de demanda": "Explore cenários com o Random Forest treinado",
         "Visão geral": "Demanda horária por bicicletas compartilhadas",
         "Modelos de Machine Learning": "Comparação dos modelos no teste final reservado",
         "Validação temporal": "Estabilidade e padrões de erro em janelas progressivas",
@@ -539,8 +631,10 @@ def main() -> None:
         _show_overview()
     elif page == "Modelos de Machine Learning":
         _show_model_comparison()
-    else:
+    elif page == "Validação temporal":
         _show_temporal_validation()
+    else:
+        _show_simulator()
 
 
 if __name__ == "__main__":

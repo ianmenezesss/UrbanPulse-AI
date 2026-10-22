@@ -44,6 +44,8 @@ Thumbs.db
 !/reports/model_comparison/
 /reports/model_comparison/*
 !/reports/model_comparison/*.csv
+/models/*
+!/models/.gitkeep
 
 # Secrets and local environment configuration
 .env

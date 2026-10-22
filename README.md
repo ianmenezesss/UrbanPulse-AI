@@ -341,11 +341,12 @@ Inicie o Streamlit:
 
     python -m streamlit run src/urbanpulse/dashboard.py
 
-Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral contém três áreas:
+Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral tem quatro áreas:
 
 - **Visão geral:** indicadores atuais e exploração da demanda; os filtros de ano e tipo de dia continuam disponíveis.
 - **Modelos de Machine Learning:** MAE, RMSE e R² dos quatro modelos no teste final reservado. Esse conjunto não é combinado com os resultados de validação.
 - **Validação temporal:** resultados de Ridge e Random Forest em cinco janelas nos 80% iniciais, com previsões fora da amostra, erros por hora e dia da semana.
+- **Simulador de demanda:** estima aluguéis por hora com o pipeline Random Forest salvo e condições informadas pelo usuário.
 
 MAE e RMSE são erros em aluguéis por hora, então valores menores indicam previsões mais próximas; RMSE dá peso maior a erros grandes. R² compara a previsão com uma referência baseada na média e pode ser negativo. Na validação temporal, as curvas por janela mostram estabilidade entre períodos, pontos próximos à diagonal representam previsões próximas dos valores reais, e erro negativo indica subestimação. O painel apenas lê os relatórios: ele não treina modelos. Se os CSVs estiverem ausentes, as respectivas áreas mostram o comando para gerá-los.
 
@@ -365,12 +366,37 @@ Start Streamlit:
 
     python -m streamlit run src/urbanpulse/dashboard.py
 
-Open the address printed in the terminal, usually http://localhost:8501. The sidebar has three areas:
+Open the address printed in the terminal, usually http://localhost:8501. The sidebar has four areas:
 
 - **Overview:** existing demand indicators and exploration charts; year and day-type filters remain available.
 - **Machine learning models:** MAE, RMSE, and R² for all four models on the reserved final test set. This set is kept separate from validation results.
 - **Temporal validation:** Ridge and Random Forest results over five windows within the first 80%, with out-of-sample predictions and errors by hour and weekday.
+- **Demand simulator:** estimates hourly rentals with the saved Random Forest pipeline and user supplied conditions.
 
 MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it.
 
 Weather predictors assume forecasts are available for each future hour. In a real deployment, weather observations from after the target hour would leak future information.
+
+### Simulador de demanda
+
+Gere o pipeline do Random Forest antes de abrir o dashboard. A rotina usa o mesmo split cronológico dos modelos e ajusta o pipeline somente nos 80% iniciais; os 20% finais permanecem reservados:
+
+```bash
+python -m pip install -e ".[ml,dashboard]"
+urbanpulse-train-random-forest
+python -m streamlit run src/urbanpulse/dashboard.py
+```
+
+Na área **Simulador de demanda**, selecione data, hora, feriado, categoria do tempo, temperatura, sensação térmica, umidade e vento. A data só pode estar entre 2011 e 2012, período representado no treinamento. As entradas meteorológicas são convertidas para a escala normalizada UCI: temperatura `(°C + 8) / 47`, sensação térmica `(°C + 16) / 66`, umidade `% / 100` e vento `escala UCI / 67`. A fonte não especifica unidade física do vento. O painel deriva as variáveis de calendário e carrega o artefato salvo; não treina ao interagir. A estimativa é uma simulação histórica condicionada às entradas, sem consulta de meteorologia em tempo real. O arquivo `models/random_forest.joblib` é local e ignorado pelo Git; gere-o novamente com o comando acima quando necessário.
+
+### Demand simulator
+
+Train the Random Forest pipeline before opening the dashboard. The routine uses the same chronological split as the models and fits only on the initial 80%; the final 20% stays reserved:
+
+```bash
+python -m pip install -e ".[ml,dashboard]"
+urbanpulse-train-random-forest
+python -m streamlit run src/urbanpulse/dashboard.py
+```
+
+In **Simulador de demanda**, configure a date, hour, holiday flag, weather category, temperature, apparent temperature, humidity, and wind. Dates are restricted to 2011–2012, the period represented during training. Weather inputs are converted to UCI's normalized scale: temperature `(°C + 8) / 47`, apparent temperature `(°C + 16) / 66`, humidity `% / 100`, and wind `UCI scale / 67`. UCI does not specify a physical unit for wind. The dashboard derives calendar features and loads the saved artifact; it does not train during interaction. The estimate is a historical simulation conditioned on the inputs, with no real-time weather lookup. `models/random_forest.joblib` is local and Git-ignored; regenerate it with the command above when needed.
