@@ -366,14 +366,15 @@ Start Streamlit:
 
     python -m streamlit run src/urbanpulse/dashboard.py
 
-Open the address printed in the terminal, usually http://localhost:8501. The sidebar has four areas:
+Open the address printed in the terminal, usually http://localhost:8501. The sidebar has five areas:
 
 - **Overview:** existing demand indicators and exploration charts; year and day-type filters remain available.
 - **Machine learning models:** MAE, RMSE, and R² for all four models on the last 20%. This test has already been consulted to compare models; do not use it for new modeling decisions or interpret it as an independent evaluation. The retrospective metrics use observed weather from the predicted hour.
 - **Temporal validation:** out-of-sample Ridge and Random Forest results over five windows within the first 80%. These results also use observed historical weather and do not represent performance with future weather forecasts.
-- **Demand simulator:** estimates hourly rentals with the saved Random Forest pipeline and user supplied conditions.
+- **Demand simulator:** estimates hourly rentals with the saved Random Forest pipeline and user supplied conditions. Its 24-hour curve keeps weather constant and represents scenarios, not an operational forecast.
+- **Interpretability:** presents Permutation Importance generated on temporal validation windows within the initial 80%; importance describes predictive association, not causality.
 
-MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it.
+MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it. To capture screenshots, open each area in the browser and use your operating system capture tool; if screenshots are added to the portfolio, save optimized images under `docs/images/` and avoid large raw files.
 
 Weather predictors assume forecasts are available for each future hour. Current evaluations use observed dataset conditions, so they do not measure performance with real weather forecasts. In operation, do not use weather observations made after the target hour.
 

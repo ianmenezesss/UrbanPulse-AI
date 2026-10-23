@@ -110,12 +110,15 @@ def load_cached_simulator_model(
 def _style_figure(figure: Figure, *, height: int | None = None) -> Figure:
     figure.update_layout(
         template="plotly_white",
-        margin={"l": 16, "r": 16, "t": 56, "b": 16},
-        font={"family": "Inter, Segoe UI, sans-serif", "color": "#233142"},
+        margin={"l": 20, "r": 20, "t": 64, "b": 28},
+        font={"family": "Arial, sans-serif", "color": "#203442", "size": 13},
         title={"x": 0.02, "xanchor": "left", "font": {"size": 18}},
         legend_title_text="",
         height=height,
+        autosize=True,
     )
+    figure.update_xaxes(automargin=True, gridcolor="#E8EEF1", zerolinecolor="#C8D5DB")
+    figure.update_yaxes(automargin=True, gridcolor="#E8EEF1", zerolinecolor="#C8D5DB")
     return figure
 
 
@@ -128,16 +131,28 @@ def _format_decimal_pt(value: float) -> str:
 
 
 def _show_header(subtitle: str) -> None:
-    st.markdown(
-        f"""
-        <div class="hero">
-            <div class="hero-kicker">URBAN MOBILITY · DATA EXPLORATION</div>
-            <h1>UrbanPulse AI</h1>
-            <p>{subtitle}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        brand, source = st.columns([4, 1], vertical_alignment="center")
+        with brand:
+            st.caption("MOBILIDADE URBANA · ANÁLISE DE DADOS")
+            st.title("UrbanPulse AI")
+            st.write(subtitle)
+        with source:
+            st.link_button(
+                "Dataset oficial UCI",
+                "https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset",
+                use_container_width=True,
+            )
+            st.caption("Bike Sharing Dataset · demanda horária")
+
+
+def _show_metric_cards(items: list[tuple[str, str, str | None]]) -> None:
+    """Render consistently sized native metric cards that can wrap on narrow screens."""
+    columns = st.columns(len(items))
+    for column, (label, value, help_text) in zip(columns, items):
+        with column:
+            with st.container(border=True):
+                st.metric(label, value, help=help_text)
 
 
 def _show_overview() -> None:
@@ -179,11 +194,12 @@ def _show_overview() -> None:
         f"Exibindo {len(filtered):,} de {len(data):,} intervalos horários · "
         f"{filtered['datetime'].min():%d/%m/%Y} — {filtered['datetime'].max():%d/%m/%Y}"
     )
-    metrics = st.columns(4)
-    metrics[0].metric("Total de aluguéis", _format_integer_pt(int(filtered["cnt"].sum())))
-    metrics[1].metric("Média por hora", _format_decimal_pt(float(filtered["cnt"].mean())))
-    metrics[2].metric("Mediana por hora", _format_integer_pt(int(filtered["cnt"].median())))
-    metrics[3].metric("Máximo em uma hora", _format_integer_pt(int(filtered["cnt"].max())))
+    _show_metric_cards([
+        ("Total de aluguéis", _format_integer_pt(int(filtered["cnt"].sum())), "Soma dos aluguéis no período filtrado."),
+        ("Média por hora", _format_decimal_pt(float(filtered["cnt"].mean())), "Média dos registros horários filtrados."),
+        ("Mediana por hora", _format_integer_pt(int(filtered["cnt"].median())), "Metade dos intervalos tem valor menor ou igual a este."),
+        ("Máximo em uma hora", _format_integer_pt(int(filtered["cnt"].max())), "Maior valor observado em um intervalo filtrado."),
+    ])
 
     st.markdown("### Ritmos de uso")
     left, right = st.columns(2)
@@ -389,6 +405,18 @@ def _show_temporal_validation() -> None:
         return
 
     summary = reports["summary_metrics"].copy()
+    ridge_mae = reports["window_metrics"].loc[
+        reports["window_metrics"]["model"] == "Ridge", ["window", "mae"]
+    ].set_index("window")["mae"]
+    forest_mae = reports["window_metrics"].loc[
+        reports["window_metrics"]["model"] == "Random Forest", ["window", "mae"]
+    ].set_index("window")["mae"]
+    shared_windows = ridge_mae.index.intersection(forest_mae.index)
+    forest_wins = int((forest_mae.loc[shared_windows] < ridge_mae.loc[shared_windows]).sum())
+    _show_metric_cards([
+        ("Janelas com menor MAE · Random Forest", f"{forest_wins}/{len(shared_windows)}", "Comparação derivada das métricas já salvas por janela."),
+        ("Períodos avaliados", str(len(shared_windows)), "Validação progressiva somente nos 80% iniciais."),
+    ])
     summary["Modelo"] = summary["model"]
     summary = summary[["Modelo", "mae_mean", "mae_std", "rmse_mean", "rmse_std", "r2_mean", "r2_std"]]
     summary = summary.rename(
@@ -632,11 +660,12 @@ def _show_simulator() -> None:
     selected = hourly_predictions.loc[hourly_predictions["hr"] == hour].iloc[0]
     busiest = hourly_predictions.loc[hourly_predictions["demand_estimated"].idxmax()]
     quietest = hourly_predictions.loc[hourly_predictions["demand_estimated"].idxmin()]
-    metrics = st.columns(4)
-    metrics[0].metric("Demanda estimada no horário", _format_decimal_pt(float(selected["demand_estimated"])))
-    metrics[1].metric("Maior demanda", f"{int(busiest['hr']):02d}:00 · {_format_decimal_pt(float(busiest['demand_estimated']))}")
-    metrics[2].metric("Menor demanda", f"{int(quietest['hr']):02d}:00 · {_format_decimal_pt(float(quietest['demand_estimated']))}")
-    metrics[3].metric("Total estimado em 24 horas", _format_integer_pt(round(float(hourly_predictions["demand_estimated"].sum()))))
+    _show_metric_cards([
+        ("Estimativa no horário selecionado", _format_decimal_pt(float(selected["demand_estimated"])), "Estimativa individual para a hora escolhida."),
+        ("Pico estimado", f"{int(busiest['hr']):02d}:00 · {_format_decimal_pt(float(busiest['demand_estimated']))}", "Maior valor entre as 24 horas simuladas."),
+        ("Menor demanda estimada", f"{int(quietest['hr']):02d}:00 · {_format_decimal_pt(float(quietest['demand_estimated']))}", "Menor valor entre as 24 horas simuladas."),
+        ("Total estimado · 24 horas", _format_integer_pt(round(float(hourly_predictions["demand_estimated"].sum()))), "Soma das estimativas horárias; resultado arredondado apenas para exibição."),
+    ])
 
     hourly_predictions = hourly_predictions.assign(
         hour_label=hourly_predictions["hr"].map(lambda value: f"{value:02d}:00")
@@ -742,30 +771,36 @@ def _show_interpretability() -> None:
         "O aumento do MAE é calculado como MAE após embaralhar a variável menos MAE original. "
         "A análise usa somente previsões fora da amostra nas janelas iniciais."
     )
+    feature_descriptions = {
+        "season": "Categoria sazonal codificada pela UCI a partir das transições observadas no calendário.",
+        "yr": "Ano do dataset: 0 representa 2011 e 1 representa 2012.",
+        "mnth": "Mês do calendário, de 1 (janeiro) a 12 (dezembro).",
+        "hr": "Hora do dia, de 0 a 23.",
+        "holiday": "Indicador de feriado conforme o calendário publicado no dataset UCI.",
+        "weekday": "Dia da semana na codificação UCI: domingo=0 até sábado=6.",
+        "workingday": "Indica dia útil segundo a definição da UCI; fins de semana e feriados valem 0.",
+        "weathersit": "Categoria UCI que resume a condição meteorológica observada.",
+        "temp": "Temperatura do ar normalizada na escala UCI.",
+        "atemp": "Sensação térmica normalizada na escala UCI.",
+        "hum": "Umidade relativa normalizada na escala UCI.",
+        "windspeed": "Velocidade do vento normalizada na escala UCI; a fonte não especifica unidade física.",
+    }
+    with st.expander("O que significa cada variável?"):
+        descriptions = pd.DataFrame(
+            [(feature, description) for feature, description in feature_descriptions.items()],
+            columns=["Variável", "Descrição"],
+        )
+        st.dataframe(descriptions, hide_index=True, width="stretch")
 
 
 def main() -> None:
-    st.markdown(
-        """
-        <style>
-        .block-container {padding-top: 2rem; padding-bottom: 3rem; max-width: 1440px;}
-        .hero {padding: 1.6rem 2rem; margin: 0 0 1.6rem 0; border-radius: 18px;
-               background: linear-gradient(115deg, #11283f 0%, #17445b 58%, #087f78 100%);}
-        .hero-kicker {color: #9ee5d6; font-size: .72rem; letter-spacing: .16em; font-weight: 700;}
-        .hero h1 {color: white; margin: .45rem 0 .2rem 0; font-size: 2.25rem;}
-        .hero p {color: #d7e7ed; margin: 0; font-size: 1.02rem;}
-        [data-testid="stMetric"] {background: #fff; border: 1px solid #e4ebef;
-                                   padding: 1rem 1.1rem; border-radius: 14px;}
-        [data-testid="stMetricLabel"] {color: #536777;}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     st.sidebar.markdown("## UrbanPulse AI")
+    st.sidebar.caption("Explore os dados, a avaliação e os cenários")
     page = st.sidebar.radio(
         "Navegação",
         ["Visão geral", "Modelos de Machine Learning", "Validação temporal", "Simulador de demanda", "Interpretabilidade"],
         label_visibility="collapsed",
+        key="dashboard_page",
     )
     subtitles = {
         "Interpretabilidade": "Variáveis associadas à capacidade preditiva do Random Forest",
