@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -11,6 +12,12 @@ import joblib
 
 from urbanpulse.ml.baseline import DEFAULT_DATA_PATH, TARGET, load_processed_data, temporal_train_test_split
 from urbanpulse.ml.random_forest import build_random_forest_pipeline, select_features
+from urbanpulse.ml.artifact_metadata import (
+    ARTIFACT_METADATA_SCHEMA,
+    current_runtime_versions,
+    metadata_path_for_artifact,
+    sha256_file,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "random_forest.joblib"
@@ -19,6 +26,7 @@ DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "random_forest.joblib"
 @dataclass(frozen=True)
 class TrainingArtifactResult:
     artifact_path: Path
+    metadata_path: Path
     train_rows: int
     test_rows_reserved: int
     train_start: object
@@ -33,13 +41,38 @@ def train_and_save_artifact(
     frame = load_processed_data(input_path)
     train, test_reserved = temporal_train_test_split(frame, train_fraction=0.8)
     pipeline = build_random_forest_pipeline()
-    pipeline.fit(select_features(train), train[TARGET])
+    features = select_features(train)
+    pipeline.fit(features, train[TARGET])
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, output_path)
+    model = pipeline.named_steps["regressor"]
+    metadata = {
+        "metadata_schema": ARTIFACT_METADATA_SCHEMA,
+        "versions": current_runtime_versions(),
+        "features": list(features.columns),
+        "train_rows": len(train),
+        "total_rows": len(frame),
+        "training_period": {
+            "start": str(train["datetime"].iloc[0]),
+            "end": str(train["datetime"].iloc[-1]),
+        },
+        "model_parameters": {
+            "n_estimators": model.n_estimators,
+            "min_samples_leaf": model.min_samples_leaf,
+            "random_state": model.random_state,
+            "n_jobs": model.n_jobs,
+        },
+        "dataset_file": Path(input_path).name,
+        "dataset_sha256": sha256_file(Path(input_path)),
+        "artifact_sha256": sha256_file(output_path),
+    }
+    metadata_path = metadata_path_for_artifact(output_path)
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return TrainingArtifactResult(
         artifact_path=output_path,
+        metadata_path=metadata_path,
         train_rows=len(train),
         test_rows_reserved=len(test_reserved),
         train_start=train["datetime"].iloc[0],
@@ -58,6 +91,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.exit(1, f"ERROR: {exc}\n")
 
     print(f"Saved model: {result.artifact_path}")
+    print(f"Saved metadata: {result.metadata_path}")
     print(f"Training rows: {result.train_rows:,} ({result.train_start} — {result.train_end})")
     print(f"Reserved final test rows (not used for fitting): {result.test_rows_reserved:,}")
     print("Features: season, yr, mnth, hr, holiday, weekday, workingday, weathersit, temp, atemp, hum, windspeed")

@@ -191,7 +191,7 @@ python -m pip install -e ".[ml]"
 urbanpulse-ridge
 ```
 
-O Ridge usa o mesmo split cronológico 80/20 dos baselines e `alpha=1.0`, sem busca de hiperparâmetros. As features são variáveis de calendário e condições meteorológicas; `instant`, `casual`, `registered` e `cnt` são excluídas das entradas. Variáveis categóricas passam por `OneHotEncoder`; variáveis meteorológicas numéricas passam por `StandardScaler`. Ambos os transformadores são ajustados somente no treino. **O uso das condições meteorológicas pressupõe que previsões meteorológicas para a hora futura estejam disponíveis no momento da previsão.** Nesta primeira avaliação, os valores meteorológicos observados no dataset servem como representação dessas informações disponíveis; na aplicação real, usar observações futuras causaria vazamento e seria necessário fornecer previsões meteorológicas.
+O Ridge usa o mesmo split cronológico 80/20 dos baselines e `alpha=1.0`, sem busca de hiperparâmetros. As features são variáveis de calendário e condições meteorológicas; `instant`, `casual`, `registered` e `cnt` são excluídas das entradas. Variáveis categóricas passam por `OneHotEncoder`; variáveis meteorológicas numéricas passam por `StandardScaler`. Ambos os transformadores são ajustados somente no treino. A avaliação retrospectiva usa clima observado na própria hora prevista, que não estaria disponível em uma previsão operacional. Para medir desempenho operacional seriam necessárias previsões meteorológicas arquivadas, disponíveis no instante da previsão; esse cenário ainda não foi avaliado.
 
 Resultados obtidos neste split (13.903 linhas de treino; 3.476 de teste):
 
@@ -201,7 +201,7 @@ Resultados obtidos neste split (13.903 linhas de treino; 3.476 de teste):
 | Média de treino por hora | 113,7316 | 167,3239 | 0,4241 |
 | Ridge (`alpha=1.0`) | 98,8691 | 133,9076 | 0,6311 |
 
-Neste holdout, Ridge apresentou os menores erros e o maior R² entre as três abordagens. Essa comparação corresponde a um único período de teste e não substitui validação temporal adicional.
+Neste holdout já consultado, Ridge apresentou os menores erros e o maior R² entre as três abordagens. Essa comparação é retrospectiva e não representa uma avaliação independente do modelo escolhido.
 
 ### Ridge regression
 Install the optional ML extra and run the model from the repository root:
@@ -211,7 +211,7 @@ python -m pip install -e ".[ml]"
 urbanpulse-ridge
 ```
 
-Ridge uses the same chronological 80/20 split as the baselines and a fixed `alpha=1.0`, with no hyperparameter search. Predictors are calendar and weather variables; `instant`, `casual`, `registered`, and `cnt` are excluded from inputs. Categorical variables use `OneHotEncoder`; numeric weather variables use `StandardScaler`. Both transformers are fitted on training data only. **Using weather conditions assumes forecasts for the target future hour are available when the prediction is made.** In this initial evaluation, observed weather values in the dataset represent that available information; a real application must supply weather forecasts, since using future observations would leak information.
+Ridge uses the same chronological 80/20 split as the baselines and a fixed `alpha=1.0`, with no hyperparameter search. Predictors are calendar and weather variables; `instant`, `casual`, `registered`, and `cnt` are excluded from inputs. Categorical variables use `OneHotEncoder`; numeric weather variables use `StandardScaler`. Both transformers are fitted on training data only. The retrospective evaluation uses weather observed at the target hour, which is not information available in a real forecast. Operational performance requires archived weather forecasts available at prediction time; this project has not evaluated that setting.
 
 Results on this split (13,903 training rows; 3,476 test rows):
 
@@ -221,7 +221,7 @@ Results on this split (13,903 training rows; 3,476 test rows):
 | Training mean by hour | 113.7316 | 167.3239 | 0.4241 |
 | Ridge (`alpha=1.0`) | 98.8691 | 133.9076 | 0.6311 |
 
-On this holdout, Ridge had the lowest errors and highest R² among the three approaches. This comparison covers one test period and does not replace further temporal validation.
+On this already consulted holdout, Ridge had the lowest errors and highest R² among the three approaches. This is a retrospective comparison, not an independent evaluation of the selected model.
 
 ### Random Forest Regressor
 Execute o novo modelo na raiz do projeto, com o extra `ml` instalado:
@@ -243,7 +243,7 @@ Resultados no mesmo holdout cronológico (13.903 linhas de treino; 3.476 de test
 | Ridge (`alpha=1.0`) | 98,8691 | 133,9076 | 0,6311 |
 | Random Forest | 56,4021 | 84,6040 | 0,8528 |
 
-Neste período de teste, o Random Forest teve os menores erros e o maior R² entre as abordagens avaliadas. O resultado vale para esse único holdout e não substitui validação temporal adicional.
+Neste período de teste, o Random Forest teve os menores erros e o maior R² entre as abordagens avaliadas. Este holdout já foi consultado na comparação e seleção entre modelos; trate estes valores como avaliação retrospectiva, não como estimativa independente do modelo escolhido. A avaliação usa observações meteorológicas históricas da própria hora prevista, não previsões arquivadas.
 
 ### Random Forest Regressor
 Run the new model from the repository root with the `ml` extra installed:
@@ -254,7 +254,7 @@ urbanpulse-random-forest
 
 Random Forest uses the same calendar and weather features as Ridge and the same chronological 80/20 split, without shuffling. `instant`, `casual`, `registered`, and `cnt` are excluded from features. Categories are encoded with `OneHotEncoder`, fitted on training data only; numeric variables remain unscaled because trees do not depend on feature scale. Fixed parameters are `n_estimators=100`, `min_samples_leaf=2`, `random_state=42`, and `n_jobs=-1`: 100 trees provide a stable ensemble average, a minimum leaf size of two limits overly specific trees, the seed makes sampling reproducible, and `n_jobs=-1` uses available processors. No hyperparameter search was performed.
 
-As with Ridge, weather conditions assume forecasts for the future hour are available at prediction time. The dataset's historical weather observations serve as a proxy; a real application must use forecasts, never conditions observed after the target hour.
+As with Ridge, the retrospective evaluation uses weather observed at the target hour, which is unavailable in a real forecast. Operational performance requires archived weather forecasts available at prediction time; this project has not evaluated that setting.
 
 Results on the same chronological holdout (13,903 training rows; 3,476 test rows):
 
@@ -265,7 +265,7 @@ Results on the same chronological holdout (13,903 training rows; 3,476 test rows
 | Ridge (`alpha=1.0`) | 98.8691 | 133.9076 | 0.6311 |
 | Random Forest | 56.4021 | 84.6040 | 0.8528 |
 
-On this test period, Random Forest had the lowest errors and highest R² among the evaluated approaches. This result applies to one holdout and does not replace further temporal validation.
+On this test period, Random Forest had the lowest errors and highest R² among the evaluated approaches. This holdout has already been consulted to compare and select among models; treat these values as a retrospective evaluation, not an independent estimate for the selected model. The evaluation uses historical weather observations from the predicted hour, not archived weather forecasts.
 
 ### Validação temporal e análise de erros
 Com o extra opcional de ML instalado, execute na raiz do projeto:
@@ -344,13 +344,13 @@ Inicie o Streamlit:
 Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral tem quatro áreas:
 
 - **Visão geral:** indicadores atuais e exploração da demanda; os filtros de ano e tipo de dia continuam disponíveis.
-- **Modelos de Machine Learning:** MAE, RMSE e R² dos quatro modelos no teste final reservado. Esse conjunto não é combinado com os resultados de validação.
-- **Validação temporal:** resultados de Ridge e Random Forest em cinco janelas nos 80% iniciais, com previsões fora da amostra, erros por hora e dia da semana.
+- **Modelos de Machine Learning:** MAE, RMSE e R² dos quatro modelos no teste final dos últimos 20%. Esse teste já foi consultado na comparação entre modelos; não o use para novas decisões nem o interprete como avaliação independente. As métricas são retrospectivas e usam clima histórico observado na hora prevista.
+- **Validação temporal:** resultados fora da amostra de Ridge e Random Forest em cinco janelas dentro dos 80% iniciais. Também usam clima histórico observado; não representam desempenho com previsão meteorológica futura.
 - **Simulador de demanda:** estima aluguéis por hora com o pipeline Random Forest salvo e condições informadas pelo usuário.
 
 MAE e RMSE são erros em aluguéis por hora, então valores menores indicam previsões mais próximas; RMSE dá peso maior a erros grandes. R² compara a previsão com uma referência baseada na média e pode ser negativo. Na validação temporal, as curvas por janela mostram estabilidade entre períodos, pontos próximos à diagonal representam previsões próximas dos valores reais, e erro negativo indica subestimação. O painel apenas lê os relatórios: ele não treina modelos. Se os CSVs estiverem ausentes, as respectivas áreas mostram o comando para gerá-los.
 
-O uso de variáveis meteorológicas nos modelos pressupõe previsões disponíveis para cada hora futura. Em uma operação real, observações meteorológicas posteriores à hora prevista causariam vazamento.
+O uso de variáveis meteorológicas nos modelos pressupõe previsões disponíveis para cada hora futura. As avaliações atuais usam condições observadas no dataset e, portanto, não medem o desempenho com previsões meteorológicas reais. Em operação, não use observações meteorológicas posteriores à hora prevista.
 
 ### Local dashboard
 Install the dashboard and ML extras in the project virtual environment (ML is needed to generate the final-test report):
@@ -369,13 +369,13 @@ Start Streamlit:
 Open the address printed in the terminal, usually http://localhost:8501. The sidebar has four areas:
 
 - **Overview:** existing demand indicators and exploration charts; year and day-type filters remain available.
-- **Machine learning models:** MAE, RMSE, and R² for all four models on the reserved final test set. This set is kept separate from validation results.
-- **Temporal validation:** Ridge and Random Forest results over five windows within the first 80%, with out-of-sample predictions and errors by hour and weekday.
+- **Machine learning models:** MAE, RMSE, and R² for all four models on the last 20%. This test has already been consulted to compare models; do not use it for new modeling decisions or interpret it as an independent evaluation. The retrospective metrics use observed weather from the predicted hour.
+- **Temporal validation:** out-of-sample Ridge and Random Forest results over five windows within the first 80%. These results also use observed historical weather and do not represent performance with future weather forecasts.
 - **Demand simulator:** estimates hourly rentals with the saved Random Forest pipeline and user supplied conditions.
 
 MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it.
 
-Weather predictors assume forecasts are available for each future hour. In a real deployment, weather observations from after the target hour would leak future information.
+Weather predictors assume forecasts are available for each future hour. Current evaluations use observed dataset conditions, so they do not measure performance with real weather forecasts. In operation, do not use weather observations made after the target hour.
 
 ### Simulador de demanda
 
@@ -401,9 +401,17 @@ python -m streamlit run src/urbanpulse/dashboard.py
 
 In **Simulador de demanda**, configure a date, hour, holiday flag, weather category, temperature, apparent temperature, humidity, and wind. Dates are restricted to 2011–2012, the period represented during training. Weather inputs are converted to UCI's normalized scale: temperature `(°C + 8) / 47`, apparent temperature `(°C + 16) / 66`, humidity `% / 100`, and wind `UCI scale / 67`. UCI does not specify a physical unit for wind. The dashboard derives calendar features and loads the saved artifact; it does not train during interaction. The estimate is a historical simulation conditioned on the inputs, with no real-time weather lookup. `models/random_forest.joblib` is local and Git-ignored; regenerate it with the command above when needed.
 
+O treinamento também grava `models/random_forest.joblib.metadata.json`, com hash SHA-256 do Parquet processado, lista ordenada de features, período e tamanho do treino, parâmetros e versões de Python/scikit-learn/pandas/joblib. O carregador exige correspondência dessas versões, do hash do artefato, do schema e dos parâmetros; gere novamente o modelo após atualizar o ambiente. Joblib desserializa objetos Python e pode executar código ao carregar: use somente artefatos produzidos localmente ou obtidos de uma fonte confiável.
+
+O calendário do simulador foi conferido contra o `hour.csv`: `season` muda em 21/03, 21/06, 23/09 e 21/12; `weekday` segue domingo=0; `yr` e `mnth` são derivados do ano/mês; o modo automático de feriado usa as datas marcadas pela UCI em 2011–2012 e `workingday` exclui fins de semana e feriados. A regra só é garantida para os dois anos do dataset. A opção de forçar feriado serve apenas para cenários.
+
 ### Gráfico de demanda prevista nas 24 horas
 
 Na área **Simulador de demanda**, gere uma estimativa para o cenário informado. A curva mostra uma estimativa para cada hora, de 00:00 a 23:00; o marcador destaca a hora escolhida no controle. Os indicadores de maior e menor demanda identificam os extremos dessa curva, e o total diário é a soma das 24 estimativas (arredondada apenas para exibição). Para tornar a comparação horária consistente, o gráfico mantém data, feriado e condições meteorológicas constantes ao longo do dia. É uma análise de cenários históricos, não uma previsão meteorológica em tempo real. O dashboard reutiliza o artefato salvo e não retreina o Random Forest.
+
+Training also writes `models/random_forest.joblib.metadata.json` with the processed Parquet SHA-256, ordered feature list, training period and size, parameters, and Python/scikit-learn/pandas/joblib versions. The loader requires matching versions, artifact hash, schema, and parameters; regenerate the model after changing the environment. Joblib deserializes Python objects and can execute code while loading: use only locally produced artifacts or artifacts from a trusted source.
+
+The simulator calendar was checked against `hour.csv`: `season` changes on Mar 21, Jun 21, Sep 23, and Dec 21; `weekday` uses Sunday=0; `yr` and `mnth` come from the date; automatic holidays use UCI-marked dates in 2011–2012; and `workingday` excludes weekends and holidays. These rules are verified only for the two dataset years. Forcing a holiday is a scenario override.
 
 ### 24-hour estimated demand chart
 

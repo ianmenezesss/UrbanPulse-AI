@@ -25,6 +25,12 @@ The dataset contains hourly and daily rental-bike counts from the Capital Bikesh
 
 The hourly file includes the date and hour, season, year, month, holiday and weekday indicators, weather situation, normalized temperature, perceived temperature, humidity and wind speed, counts of casual and registered users, and total rentals (`cnt`). In the published schema, `cnt` is the sum of `casual` and `registered`. The daily file does not include `hr`.
 
+### Calendar encoding used by the simulator
+
+The simulator supports only 2011 and 2012, the years present in `hour.csv`. The local source file was checked row by row: `yr` is 0 for 2011 and 1 for 2012; `mnth` matches the calendar month; and `weekday` uses Sunday=0 through Saturday=6. The observed `season` labels change on March 21 (1→2), June 21 (2→3), September 23 (3→4), and December 21 (4→1) in both years. The simulator uses those source-observed date boundaries rather than calendar quarters.
+
+The source marks 21 distinct holiday dates across the two years. The simulator's automatic holiday mode uses this date lookup; `workingday` is then 1 only on Monday–Friday dates that are not marked as holidays. A scenario override can force a holiday flag for a what-if simulation. These calendar mappings are evidence-based for the two source years only; they are not a general holiday calendar or a rule for later years.
+
 ## Limitations and interpretation
 
 - The records cover one bike-sharing system in one city and only two years (2011–2012); results may not generalize to other locations, systems, or current demand.

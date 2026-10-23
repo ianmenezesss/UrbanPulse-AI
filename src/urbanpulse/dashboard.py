@@ -95,9 +95,13 @@ def load_temporal_reports(
 
 
 @st.cache_resource(show_spinner="Carregando o modelo salvo…")
-def load_cached_simulator_model(path: str, modified_time_ns: int):
+def load_cached_simulator_model(
+    path: str,
+    modified_time_ns: int,
+    metadata_modified_time_ns: int,
+):
     """Cache the fitted model artifact; this function never trains a model."""
-    _ = modified_time_ns
+    _ = modified_time_ns, metadata_modified_time_ns
     from urbanpulse.simulator import load_simulator_model
 
     return load_simulator_model(Path(path))
@@ -289,8 +293,10 @@ def _show_metric_explanations() -> None:
 def _show_model_comparison() -> None:
     st.markdown("## Modelos de Machine Learning")
     st.info(
-        "Resultados do teste final reservado (últimos 20% da série cronológica). "
-        "Esta tabela é distinta da validação temporal mostrada na área seguinte."
+        "Avaliação retrospectiva nos últimos 20% da série cronológica. Este teste já foi "
+        "consultado na comparação entre modelos e não é uma avaliação independente para novas "
+        "decisões de modelagem. Os dados históricos também usam clima observado na própria hora "
+        "prevista, não previsões meteorológicas arquivadas."
     )
     path = DEFAULT_FINAL_METRICS_PATH
     if not path.is_file():
@@ -350,8 +356,8 @@ def _show_model_comparison() -> None:
     st.plotly_chart(_style_figure(figure), width="stretch")
     _show_metric_explanations()
     st.caption(
-        "Ridge e Random Forest foram ajustados apenas nos 80% iniciais. "
-        "O teste final foi usado somente para calcular estas métricas."
+        "Os modelos foram ajustados nos 80% iniciais e comparados neste holdout já consultado. "
+        "As métricas são retrospectivas e condicionadas às observações meteorológicas históricas."
     )
 
 
@@ -359,7 +365,9 @@ def _show_temporal_validation() -> None:
     st.markdown("## Validação temporal")
     st.info(
         "Resultados fora da amostra dentro dos 80% iniciais. O teste final de 20% não participa "
-        "destas janelas e seus resultados não são misturados aqui."
+        "destas janelas e seus resultados não são misturados aqui. Esta validação usa as condições "
+        "meteorológicas observadas no dataset para cada hora; não representa desempenho com "
+        "previsões meteorológicas disponíveis em tempo real."
     )
     st.markdown(
         "Em cada janela, o modelo aprende com o passado e é avaliado no próximo bloco de tempo. "
@@ -542,10 +550,16 @@ def _show_simulator() -> None:
         st.markdown("Na raiz do projeto, instale as dependências de ML e gere o artefato:")
         st.code('python -m pip install -e ".[ml,dashboard]"\nurbanpulse-train-random-forest', language="bash")
         return
+    metadata_path = DEFAULT_MODEL_PATH.with_name(f"{DEFAULT_MODEL_PATH.name}.metadata.json")
+    if not metadata_path.is_file():
+        st.warning("O artefato não tem o arquivo de metadados compatível exigido por esta versão.")
+        st.code("urbanpulse-train-random-forest", language="bash")
+        return
 
     st.info(
         "Esta é uma simulação baseada em padrões históricos e nas condições informadas. "
-        "O painel não consulta previsões meteorológicas em tempo real. No gráfico diário, "
+        "Não representa uma previsão operacional de demanda em tempo real e não consulta "
+        "previsões meteorológicas. No gráfico diário, "
         "as condições meteorológicas informadas permanecem constantes nas 24 horas; trata-se "
         "de uma comparação de cenários, não de uma previsão do tempo."
     )
@@ -558,7 +572,10 @@ def _show_simulator() -> None:
                 min_value=pd.Timestamp("2011-01-01").date(),
                 max_value=pd.Timestamp("2012-12-31").date(),
             )
-            holiday = st.checkbox("Marcar como feriado", value=False)
+            holiday_choice = st.selectbox(
+                "Feriado",
+                ["Automático (calendário observado UCI)", "Forçar feriado", "Forçar dia comum"],
+            )
         with hour_col:
             hour = st.slider("Hora do dia", min_value=0, max_value=23, value=8, format="%d:00")
             weather_label = st.selectbox("Condição do tempo (categoria UCI)", list(WEATHER_SITUATIONS))
@@ -578,8 +595,11 @@ def _show_simulator() -> None:
             "A UCI normaliza a temperatura como `(°C + 8) / 47`, a sensação térmica como "
             "`(°C + 16) / 66`, a umidade como `% / 100` e o vento como `escala UCI / 67`. "
             "A documentação da UCI não especifica unidade física para o vento; por isso o controle "
-            "usa a escala anterior à normalização. Estação, ano, mês, dia da semana, dia útil e hora "
-            "são derivados da data e do horário. O feriado e a categoria meteorológica são informados."
+            "usa a escala anterior à normalização. Estação usa as transições de data observadas no "
+            "hour.csv (21/03, 21/06, 23/09 e 21/12); ano, mês e dia da semana são derivados da data. "
+            "No modo automático, feriado usa as 21 datas marcadas pela UCI em 2011–2012; você pode "
+            "sobrescrever essa flag apenas para criar um cenário. Dia útil é calculado a partir de "
+            "fim de semana e feriado."
         )
 
     if not submitted:
@@ -588,7 +608,9 @@ def _show_simulator() -> None:
         from urbanpulse.simulator import build_daily_scenario_features, predict_daily_demand
 
         model = load_cached_simulator_model(
-            str(DEFAULT_MODEL_PATH), DEFAULT_MODEL_PATH.stat().st_mtime_ns
+            str(DEFAULT_MODEL_PATH),
+            DEFAULT_MODEL_PATH.stat().st_mtime_ns,
+            metadata_path.stat().st_mtime_ns,
         )
         features = build_daily_scenario_features(
             scenario_date,
@@ -597,7 +619,11 @@ def _show_simulator() -> None:
             humidity_percent=humidity,
             wind_speed_dataset_units=wind,
             weathersit=WEATHER_SITUATIONS[weather_label],
-            holiday=holiday,
+            holiday={
+                "Automático (calendário observado UCI)": None,
+                "Forçar feriado": True,
+                "Forçar dia comum": False,
+            }[holiday_choice],
         )
         hourly_predictions = predict_daily_demand(model, features)
     except (OSError, ValueError) as exc:
@@ -745,7 +771,7 @@ def main() -> None:
         "Interpretabilidade": "Variáveis associadas à capacidade preditiva do Random Forest",
         "Simulador de demanda": "Explore cenários com o Random Forest treinado",
         "Visão geral": "Demanda horária por bicicletas compartilhadas",
-        "Modelos de Machine Learning": "Comparação dos modelos no teste final reservado",
+        "Modelos de Machine Learning": "Comparação retrospectiva no teste final já consultado",
         "Validação temporal": "Estabilidade e padrões de erro em janelas progressivas",
     }
     _show_header(subtitles[page])

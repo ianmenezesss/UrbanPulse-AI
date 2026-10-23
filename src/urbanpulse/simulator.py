@@ -11,9 +11,51 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 
 from urbanpulse.ml.ridge import FEATURE_COLUMNS
+from urbanpulse.ml.artifact_metadata import (
+    metadata_path_for_artifact,
+    read_artifact_metadata,
+    sha256_file,
+    validate_artifact_compatibility,
+)
 from urbanpulse.ml.train_artifact import DEFAULT_MODEL_PATH
 
 YEAR_CODES = {2011: 0, 2012: 1}
+# Calendar labels transcribed from the official UCI hourly file for supported years.
+# The observed transition dates are identical in 2011 and 2012.
+UCI_SEASON_TRANSITIONS = ((3, 21, 2), (6, 21, 3), (9, 23, 4), (12, 21, 1))
+UCI_HOLIDAY_DATES = frozenset(
+    date.fromisoformat(value)
+    for value in (
+        "2011-01-17", "2011-02-21", "2011-04-15", "2011-05-30", "2011-07-04",
+        "2011-09-05", "2011-10-10", "2011-11-11", "2011-11-24", "2011-12-26",
+        "2012-01-02", "2012-01-16", "2012-02-20", "2012-04-16", "2012-05-28",
+        "2012-07-04", "2012-09-03", "2012-10-08", "2012-11-12", "2012-11-22",
+        "2012-12-25",
+    )
+)
+
+
+def uci_season_for_date(scenario_date: date) -> int:
+    """Return the UCI season code using the transitions observed in hour.csv.
+
+    The source file changes labels on March 21, June 21, September 23, and
+    December 21 in both supported years. This date rule is verified against all
+    rows in the supplied 2011–2012 source data; it is not a general climate rule.
+    """
+    if scenario_date.year not in YEAR_CODES:
+        raise ValueError("Season mapping is supported only for 2011 and 2012.")
+    season = 1
+    for month, day, new_season in UCI_SEASON_TRANSITIONS:
+        if (scenario_date.month, scenario_date.day) >= (month, day):
+            season = new_season
+    return season
+
+
+def uci_holiday_for_date(scenario_date: date) -> bool:
+    """Return the holiday flag observed in the UCI file for supported years."""
+    if scenario_date.year not in YEAR_CODES:
+        raise ValueError("Holiday mapping is supported only for 2011 and 2012.")
+    return scenario_date in UCI_HOLIDAY_DATES
 
 
 def convert_weather_to_dataset_scale(
@@ -49,7 +91,7 @@ def build_scenario_features(
     humidity_percent: float,
     wind_speed_dataset_units: float,
     weathersit: int,
-    holiday: bool,
+    holiday: bool | None = None,
 ) -> pd.DataFrame:
     """Build one row with exactly the features and encodings used in training."""
     if scenario_date.year not in YEAR_CODES:
@@ -61,6 +103,7 @@ def build_scenario_features(
 
     weekday = (scenario_date.weekday() + 1) % 7  # UCI: Sunday=0, Saturday=6
     is_weekend = weekday in (0, 6)
+    is_holiday = uci_holiday_for_date(scenario_date) if holiday is None else bool(holiday)
     weather = convert_weather_to_dataset_scale(
         temperature_c,
         apparent_temperature_c,
@@ -68,13 +111,13 @@ def build_scenario_features(
         wind_speed_dataset_units,
     )
     row = {
-        "season": (scenario_date.month - 1) // 3 + 1,
+        "season": uci_season_for_date(scenario_date),
         "yr": YEAR_CODES[scenario_date.year],
         "mnth": scenario_date.month,
         "hr": int(hour),
-        "holiday": int(bool(holiday)),
+        "holiday": int(is_holiday),
         "weekday": weekday,
-        "workingday": int(not is_weekend and not holiday),
+        "workingday": int(not is_weekend and not is_holiday),
         "weathersit": int(weathersit),
         **weather,
     }
@@ -89,7 +132,7 @@ def build_daily_scenario_features(
     humidity_percent: float,
     wind_speed_dataset_units: float,
     weathersit: int,
-    holiday: bool,
+    holiday: bool | None = None,
 ) -> pd.DataFrame:
     """Build one chronologically ordered feature row for every hour of a day."""
     features = build_scenario_features(
@@ -111,12 +154,30 @@ def load_simulator_model(path: Path = DEFAULT_MODEL_PATH) -> Pipeline:
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Random Forest artifact not found: {path}")
+    metadata_path = metadata_path_for_artifact(path)
+    if not metadata_path.is_file():
+        raise FileNotFoundError(
+            f"Model metadata not found: {metadata_path}. Regenerate the trusted artifact "
+            "with urbanpulse-train-random-forest."
+        )
+    metadata = read_artifact_metadata(metadata_path)
+    validate_artifact_compatibility(metadata)
+    if metadata["artifact_sha256"] != sha256_file(path):
+        raise ValueError("The model artifact hash does not match its metadata.")
+    if tuple(metadata["features"]) != FEATURE_COLUMNS:
+        raise ValueError("The artifact metadata feature order does not match simulator inputs.")
+    # joblib/pickle can execute code while loading. Only deserialize a trusted artifact.
     model = joblib.load(path)
     if not isinstance(model, Pipeline) or not {"preprocessor", "regressor"}.issubset(model.named_steps):
         raise ValueError("The saved artifact is not a compatible UrbanPulse Random Forest pipeline.")
     feature_names = tuple(getattr(model, "feature_names_in_", ()))
     if feature_names != FEATURE_COLUMNS:
         raise ValueError("The saved model feature schema does not match the simulator inputs.")
+    actual_parameters = model.named_steps["regressor"].get_params()
+    expected_parameters = metadata["model_parameters"]
+    for name in ("n_estimators", "min_samples_leaf", "random_state", "n_jobs"):
+        if actual_parameters.get(name) != expected_parameters.get(name):
+            raise ValueError(f"The saved model parameter '{name}' does not match its metadata.")
     return model
 
 
