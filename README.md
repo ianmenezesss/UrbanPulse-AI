@@ -400,3 +400,33 @@ python -m streamlit run src/urbanpulse/dashboard.py
 ```
 
 In **Simulador de demanda**, configure a date, hour, holiday flag, weather category, temperature, apparent temperature, humidity, and wind. Dates are restricted to 2011–2012, the period represented during training. Weather inputs are converted to UCI's normalized scale: temperature `(°C + 8) / 47`, apparent temperature `(°C + 16) / 66`, humidity `% / 100`, and wind `UCI scale / 67`. UCI does not specify a physical unit for wind. The dashboard derives calendar features and loads the saved artifact; it does not train during interaction. The estimate is a historical simulation conditioned on the inputs, with no real-time weather lookup. `models/random_forest.joblib` is local and Git-ignored; regenerate it with the command above when needed.
+
+### Gráfico de demanda prevista nas 24 horas
+
+Na área **Simulador de demanda**, gere uma estimativa para o cenário informado. A curva mostra uma estimativa para cada hora, de 00:00 a 23:00; o marcador destaca a hora escolhida no controle. Os indicadores de maior e menor demanda identificam os extremos dessa curva, e o total diário é a soma das 24 estimativas (arredondada apenas para exibição). Para tornar a comparação horária consistente, o gráfico mantém data, feriado e condições meteorológicas constantes ao longo do dia. É uma análise de cenários históricos, não uma previsão meteorológica em tempo real. O dashboard reutiliza o artefato salvo e não retreina o Random Forest.
+
+### 24-hour estimated demand chart
+
+In **Simulador de demanda**, submit the selected scenario to see estimates from 00:00 through 23:00. The selected hour is highlighted. The highest and lowest indicators show the extrema of this curve; the daily total sums all 24 estimates (rounded only for display). Date, holiday, and weather conditions stay fixed across the day so the chart compares hourly scenarios consistently. It is a historical scenario analysis, not a real-time weather forecast. The dashboard reuses the saved artifact and does not retrain Random Forest.
+
+### Interpretabilidade com Permutation Importance
+
+Instale os extras de ML e dashboard e gere o relatório antes de abrir a área **Interpretabilidade**:
+
+```bash
+python -m pip install -e ".[ml,dashboard]"
+urbanpulse-interpretability
+```
+
+O comando ajusta um pipeline Random Forest em cada uma das cinco janelas progressivas dos 80% iniciais e mede a importância no bloco seguinte, fora da amostra. Os 20% finais não participam. O CSV `reports/interpretability/permutation_importance.csv` contém a média e o desvio padrão por variável em cada janela e uma linha agregada por variável. A métrica é o aumento do MAE (aluguéis/hora) depois de embaralhar a variável; valores maiores indicam maior importância preditiva. Na visão agregada, o desvio padrão mede a variação entre janelas; em cada janela, mede a variação entre as cinco permutações. Variáveis correlacionadas podem substituir umas às outras e reduzir a importância individual observada. A importância mede associação preditiva, não causalidade. O dashboard apenas carrega o CSV, permite alternar entre agregado e janelas e não treina nem calcula importâncias durante a interação.
+
+### Permutation importance interpretability
+
+Install the ML and dashboard extras, then generate the report before opening **Interpretabilidade**:
+
+```bash
+python -m pip install -e ".[ml,dashboard]"
+urbanpulse-interpretability
+```
+
+The command fits a Random Forest pipeline in each of five expanding windows within the initial 80%, then measures importance on the next, out-of-sample block. The final 20% is excluded. `reports/interpretability/permutation_importance.csv` contains per-variable means and standard deviations for each window plus one aggregate row per variable. Importance is the increase in MAE (rentals/hour) after shuffling a feature; larger values indicate greater predictive importance. In the aggregate view, standard deviation describes variation across windows; within a window, it describes variation across the five permutations. Correlated features can substitute for one another and reduce the observed individual importance. Importance measures predictive association, not causation. The dashboard only loads the CSV and lets users switch between aggregate and individual windows; it does not train or calculate importance during interaction.

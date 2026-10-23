@@ -12,11 +12,13 @@ from plotly.graph_objects import Figure
 from urbanpulse.dashboard_data import (
     DEFAULT_DATA_PATH,
     DEFAULT_FINAL_METRICS_PATH,
+    DEFAULT_IMPORTANCE_REPORT_PATH,
     DEFAULT_TEMPORAL_REPORT_DIR,
     WEEKDAY_NAMES_PT,
     filter_dashboard_data,
     load_dashboard_data,
     load_final_model_metrics,
+    load_permutation_importance_report,
     load_temporal_validation_reports,
 )
 
@@ -58,6 +60,13 @@ def load_final_metrics(path: str, modified_time_ns: int) -> pd.DataFrame:
     """Cache the reproducible final-test metrics report."""
     _ = modified_time_ns
     return load_final_model_metrics(Path(path))
+
+
+@st.cache_data(show_spinner="Carregando importância das variáveis…", ttl="10m")
+def load_importance_report(path: str, modified_time_ns: int) -> pd.DataFrame:
+    """Cache the precomputed CSV report; the dashboard does not calculate importance."""
+    _ = modified_time_ns
+    return load_permutation_importance_report(Path(path))
 
 
 def _temporal_report_cache_key(path: Path) -> tuple[tuple[str, int], ...]:
@@ -536,7 +545,9 @@ def _show_simulator() -> None:
 
     st.info(
         "Esta é uma simulação baseada em padrões históricos e nas condições informadas. "
-        "O painel não consulta previsões meteorológicas em tempo real."
+        "O painel não consulta previsões meteorológicas em tempo real. No gráfico diário, "
+        "as condições meteorológicas informadas permanecem constantes nas 24 horas; trata-se "
+        "de uma comparação de cenários, não de uma previsão do tempo."
     )
     with st.form("demand_simulator_form"):
         date_col, hour_col = st.columns(2)
@@ -574,14 +585,13 @@ def _show_simulator() -> None:
     if not submitted:
         return
     try:
-        from urbanpulse.simulator import build_scenario_features, predict_hourly_demand
+        from urbanpulse.simulator import build_daily_scenario_features, predict_daily_demand
 
         model = load_cached_simulator_model(
             str(DEFAULT_MODEL_PATH), DEFAULT_MODEL_PATH.stat().st_mtime_ns
         )
-        features = build_scenario_features(
+        features = build_daily_scenario_features(
             scenario_date,
-            hour,
             temperature_c=temperature,
             apparent_temperature_c=apparent_temperature,
             humidity_percent=humidity,
@@ -589,12 +599,123 @@ def _show_simulator() -> None:
             weathersit=WEATHER_SITUATIONS[weather_label],
             holiday=holiday,
         )
-        prediction = predict_hourly_demand(model, features)
+        hourly_predictions = predict_daily_demand(model, features)
     except (OSError, ValueError) as exc:
         st.error(f"Não foi possível gerar a estimativa: {exc}")
         return
-    st.metric("Demanda estimada", f"{prediction:,.0f}".replace(",", "."), "aluguéis na hora selecionada")
-    st.caption("A estimativa é condicionada às entradas acima e não representa uma previsão meteorológica real.")
+    selected = hourly_predictions.loc[hourly_predictions["hr"] == hour].iloc[0]
+    busiest = hourly_predictions.loc[hourly_predictions["demand_estimated"].idxmax()]
+    quietest = hourly_predictions.loc[hourly_predictions["demand_estimated"].idxmin()]
+    metrics = st.columns(4)
+    metrics[0].metric("Demanda estimada no horário", _format_decimal_pt(float(selected["demand_estimated"])))
+    metrics[1].metric("Maior demanda", f"{int(busiest['hr']):02d}:00 · {_format_decimal_pt(float(busiest['demand_estimated']))}")
+    metrics[2].metric("Menor demanda", f"{int(quietest['hr']):02d}:00 · {_format_decimal_pt(float(quietest['demand_estimated']))}")
+    metrics[3].metric("Total estimado em 24 horas", _format_integer_pt(round(float(hourly_predictions["demand_estimated"].sum()))))
+
+    hourly_predictions = hourly_predictions.assign(
+        hour_label=hourly_predictions["hr"].map(lambda value: f"{value:02d}:00")
+    )
+    figure = px.line(
+        hourly_predictions,
+        x="hour_label",
+        y="demand_estimated",
+        markers=True,
+        labels={"hour_label": "Horário", "demand_estimated": "Aluguéis estimados na hora"},
+        title="Demanda estimada ao longo das 24 horas",
+    )
+    figure.add_scatter(
+        x=[f"{hour:02d}:00"],
+        y=[float(selected["demand_estimated"])],
+        mode="markers+text",
+        name="Horário selecionado",
+        text=["Selecionado"],
+        textposition="top center",
+        marker={"size": 14, "color": "#E05A47", "symbol": "star"},
+    )
+    figure.update_xaxes(categoryorder="array", categoryarray=hourly_predictions["hour_label"].tolist())
+    st.plotly_chart(_style_figure(figure), width="stretch")
+    st.caption("A previsão individual acima corresponde ao horário selecionado no gráfico. O total diário é a soma das 24 estimativas, arredondada para exibição.")
+
+
+def _show_interpretability() -> None:
+    st.markdown("## Interpretabilidade do Random Forest")
+    st.info(
+        "Resultados calculados nas cinco janelas de validação temporal dentro dos 80% iniciais. "
+        "Os 20% finais permanecem reservados e não são usados nesta análise."
+    )
+    with st.expander("O que mostra a Permutation Importance?"):
+        st.markdown(
+            "Para cada variável, seu valor é embaralhado na validação e mede-se quanto o MAE aumenta "
+            "em relação à previsão original. Valores maiores indicam maior contribuição preditiva nessa "
+            "avaliação; valores negativos significam que a permutação reduziu o MAE. A média agregada "
+            "é calculada sobre as cinco janelas, e seu desvio padrão mostra a variação entre elas. "
+            "Em uma janela específica, o desvio padrão representa a variação entre as cinco permutações. "
+            "Variáveis correlacionadas podem substituir umas às outras e levar a uma importância individual "
+            "subestimada. Importância descreve associação preditiva, não causalidade."
+        )
+
+    path = DEFAULT_IMPORTANCE_REPORT_PATH
+    if not path.is_file():
+        st.warning("O relatório de Permutation Importance ainda não foi gerado.")
+        st.code("urbanpulse-interpretability", language="bash")
+        return
+    try:
+        report = load_importance_report(str(path), path.stat().st_mtime_ns)
+    except (OSError, ValueError) as exc:
+        st.error(f"Não foi possível carregar o relatório de interpretabilidade: {exc}")
+        return
+
+    scope_label = st.selectbox(
+        "Resultados para exibir",
+        ["Média agregada (cinco janelas)", "Janela 1", "Janela 2", "Janela 3", "Janela 4", "Janela 5"],
+        key="importance_scope_selector",
+    )
+    if scope_label.startswith("Média"):
+        selected = report.loc[report["scope"] == "aggregate"].copy()
+        deviation_label = "Desvio padrão entre janelas"
+    else:
+        window = int(scope_label.split()[-1])
+        selected = report.loc[
+            (report["scope"] == "window") & (report["window"] == window)
+        ].copy()
+        deviation_label = "Desvio padrão entre repetições"
+
+    feature_labels = {
+        "season": "Estação",
+        "yr": "Ano do dataset",
+        "mnth": "Mês",
+        "hr": "Hora do dia",
+        "holiday": "Feriado",
+        "weekday": "Dia da semana",
+        "workingday": "Dia útil",
+        "weathersit": "Condição do tempo",
+        "temp": "Temperatura normalizada",
+        "atemp": "Sensação térmica normalizada",
+        "hum": "Umidade normalizada",
+        "windspeed": "Vento normalizado",
+    }
+    selected["Variável"] = selected["feature"].map(feature_labels)
+    selected = selected.sort_values("importance_mean", ascending=True)
+    figure = px.bar(
+        selected,
+        x="importance_mean",
+        y="Variável",
+        orientation="h",
+        error_x="importance_std",
+        labels={
+            "importance_mean": "Aumento médio do MAE (aluguéis/hora)",
+            "Variável": "Variável",
+            "importance_std": deviation_label,
+        },
+        title=f"Permutation Importance — {scope_label}",
+        color_discrete_sequence=[ACCENT],
+    )
+    figure.update_yaxes(categoryorder="array", categoryarray=selected["Variável"].tolist())
+    st.plotly_chart(_style_figure(figure, height=560), width="stretch")
+    st.caption(
+        "O aumento do MAE é calculado como MAE após embaralhar a variável menos MAE original. "
+        "A análise usa somente previsões fora da amostra nas janelas iniciais."
+    )
 
 
 def main() -> None:
@@ -617,10 +738,11 @@ def main() -> None:
     st.sidebar.markdown("## UrbanPulse AI")
     page = st.sidebar.radio(
         "Navegação",
-        ["Visão geral", "Modelos de Machine Learning", "Validação temporal", "Simulador de demanda"],
+        ["Visão geral", "Modelos de Machine Learning", "Validação temporal", "Simulador de demanda", "Interpretabilidade"],
         label_visibility="collapsed",
     )
     subtitles = {
+        "Interpretabilidade": "Variáveis associadas à capacidade preditiva do Random Forest",
         "Simulador de demanda": "Explore cenários com o Random Forest treinado",
         "Visão geral": "Demanda horária por bicicletas compartilhadas",
         "Modelos de Machine Learning": "Comparação dos modelos no teste final reservado",
@@ -633,8 +755,10 @@ def main() -> None:
         _show_model_comparison()
     elif page == "Validação temporal":
         _show_temporal_validation()
-    else:
+    elif page == "Simulador de demanda":
         _show_simulator()
+    else:
+        _show_interpretability()
 
 
 if __name__ == "__main__":

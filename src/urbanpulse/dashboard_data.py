@@ -11,6 +11,7 @@ DEFAULT_DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "processed" /
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FINAL_METRICS_PATH = PROJECT_ROOT / "reports" / "model_comparison" / "final_test_metrics.csv"
 DEFAULT_TEMPORAL_REPORT_DIR = PROJECT_ROOT / "reports" / "temporal_validation"
+DEFAULT_IMPORTANCE_REPORT_PATH = PROJECT_ROOT / "reports" / "interpretability" / "permutation_importance.csv"
 REQUIRED_COLUMNS = ("datetime", "yr", "workingday", "hr", "weekday", "mnth", "temp", "cnt")
 FINAL_MODEL_NAMES = frozenset(
     {"training_mean", "training_hour_mean", "ridge", "random_forest"}
@@ -36,6 +37,10 @@ TEMPORAL_REPORT_FILES = {
     "errors_by_hour": "error_by_hour.csv",
     "errors_by_weekday": "error_by_weekday.csv",
 }
+IMPORTANCE_FEATURES = (
+    "season", "yr", "mnth", "hr", "holiday", "weekday", "workingday", "weathersit",
+    "temp", "atemp", "hum", "windspeed",
+)
 
 
 def load_dashboard_data(path: Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
@@ -174,3 +179,89 @@ def load_temporal_validation_reports(
         ):
             raise ValueError(f"Temporal {category} errors must cover each category once for both models.")
     return reports
+
+
+def load_permutation_importance_report(
+    path: Path = DEFAULT_IMPORTANCE_REPORT_PATH,
+) -> pd.DataFrame:
+    """Load aggregate and per-window importance, checking report consistency."""
+    path = Path(path)
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Permutation importance report not found: {path}. "
+            "Generate it with urbanpulse-interpretability."
+        )
+    report = pd.read_csv(path)
+    required = {
+        "scope", "window", "feature", "importance_mean", "importance_std",
+        "train_rows", "validation_rows", "train_start", "train_end",
+        "validation_start", "validation_end",
+    }
+    missing = required.difference(report.columns)
+    if missing:
+        raise ValueError(f"Permutation importance report is missing columns: {', '.join(sorted(missing))}.")
+    if set(report["scope"]) != {"aggregate", "window"}:
+        raise ValueError("Permutation importance report must contain aggregate and window results.")
+
+    aggregates = report.loc[report["scope"] == "aggregate"].copy()
+    windows = report.loc[report["scope"] == "window"].copy()
+    expected_features = set(IMPORTANCE_FEATURES)
+    if (
+        len(aggregates) != len(IMPORTANCE_FEATURES)
+        or set(aggregates["feature"]) != expected_features
+        or aggregates["feature"].duplicated().any()
+    ):
+        raise ValueError("Aggregate importance must contain each of the 12 model features exactly once.")
+    windows["window"] = pd.to_numeric(windows["window"], errors="coerce")
+    if windows["window"].isna().any() or set(windows["window"].unique()) != {1, 2, 3, 4, 5}:
+        raise ValueError("Permutation importance must contain the five temporal validation windows.")
+    if (
+        len(windows) != len(IMPORTANCE_FEATURES) * 5
+        or windows.duplicated(["window", "feature"]).any()
+        or any(set(group["feature"]) != expected_features for _, group in windows.groupby("window"))
+    ):
+        raise ValueError("Each importance window must contain every model feature exactly once.")
+    for column in ("importance_mean", "importance_std"):
+        report[column] = pd.to_numeric(report[column], errors="coerce")
+        if not report[column].notna().all() or not report[column].map(math.isfinite).all():
+            raise ValueError(f"Permutation importance report contains invalid values in '{column}'.")
+    if (report["importance_std"] < 0).any():
+        raise ValueError("Permutation importance standard deviations cannot be negative.")
+
+    window_metadata: list[tuple[int, int, pd.Timestamp, pd.Timestamp, pd.Timestamp]] = []
+    for window, group in windows.groupby("window"):
+        if (
+            group["train_rows"].nunique() != 1
+            or group["validation_rows"].nunique() != 1
+            or group["train_start"].nunique() != 1
+            or group["train_end"].nunique() != 1
+            or group["validation_start"].nunique() != 1
+            or group["validation_end"].nunique() != 1
+        ):
+            raise ValueError(f"Window {window} has inconsistent temporal metadata.")
+        train_end = pd.Timestamp(group["train_end"].iloc[0])
+        validation_start = pd.Timestamp(group["validation_start"].iloc[0])
+        validation_end = pd.Timestamp(group["validation_end"].iloc[0])
+        train_rows = int(group["train_rows"].iloc[0])
+        if pd.isna(train_end) or pd.isna(validation_start) or pd.isna(validation_end):
+            raise ValueError(f"Window {window} has invalid temporal boundaries.")
+        if train_end >= validation_start or validation_start > validation_end:
+            raise ValueError(f"Window {window} training data must end before validation starts.")
+        window_metadata.append((int(window), train_rows, train_end, validation_start, validation_end))
+    window_metadata.sort()
+    if any(
+        current[1] <= previous[1]
+        or current[3] <= previous[4]
+        or current[2] != previous[4]
+        for previous, current in zip(window_metadata, window_metadata[1:])
+    ):
+        raise ValueError("Importance windows must have expanding training history and non-overlapping validation blocks.")
+
+    expected = windows.groupby("feature", sort=False)["importance_mean"].agg(["mean", "std"])
+    for _, row in aggregates.iterrows():
+        feature = row["feature"]
+        if not math.isclose(row["importance_mean"], expected.loc[feature, "mean"], rel_tol=1e-6, abs_tol=1e-6):
+            raise ValueError(f"Aggregate importance for '{feature}' does not match its window results.")
+        if not math.isclose(row["importance_std"], expected.loc[feature, "std"], rel_tol=1e-6, abs_tol=1e-6):
+            raise ValueError(f"Aggregate importance deviation for '{feature}' does not match its window results.")
+    return report

@@ -14,9 +14,11 @@ from sklearn.pipeline import Pipeline
 from urbanpulse.ml.ridge import FEATURE_COLUMNS
 from urbanpulse.ml.train_artifact import train_and_save_artifact
 from urbanpulse.simulator import (
+    build_daily_scenario_features,
     build_scenario_features,
     convert_weather_to_dataset_scale,
     load_simulator_model,
+    predict_daily_demand,
     predict_hourly_demand,
 )
 
@@ -133,6 +135,50 @@ class ArtifactAndPredictionTests(unittest.TestCase):
             model_one.predict(frame.loc[24:, FEATURE_COLUMNS]),
             model_two.predict(frame.loc[24:, FEATURE_COLUMNS]),
         )
+
+    def test_daily_predictions_are_ordered_batched_and_match_selected_hour(self):
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "sample.parquet"
+            artifact_path = Path(directory) / "model.joblib"
+            sample_frame().to_parquet(input_path, index=False)
+            train_and_save_artifact(input_path, artifact_path)
+            model = load_simulator_model(artifact_path)
+
+        features = build_daily_scenario_features(
+            date(2011, 1, 3),
+            temperature_c=18,
+            apparent_temperature_c=20,
+            humidity_percent=55,
+            wind_speed_dataset_units=12,
+            weathersit=1,
+            holiday=False,
+        )
+        hourly = predict_daily_demand(model, features)
+        selected_hour = 8
+        individual = predict_hourly_demand(model, features.loc[features["hr"] == selected_hour])
+
+        self.assertEqual(len(hourly), 24)
+        self.assertEqual(hourly["hr"].tolist(), list(range(24)))
+        self.assertTrue((hourly["demand_estimated"] >= 0).all())
+        self.assertAlmostEqual(
+            hourly.loc[hourly["hr"] == selected_hour, "demand_estimated"].iloc[0],
+            individual,
+        )
+
+    def test_daily_prediction_rejects_invalid_inputs_and_nonordered_hours(self):
+        with self.assertRaisesRegex(ValueError, "temperature_c"):
+            build_daily_scenario_features(
+                date(2011, 1, 3),
+                temperature_c=50,
+                apparent_temperature_c=20,
+                humidity_percent=55,
+                wind_speed_dataset_units=12,
+                weathersit=1,
+                holiday=False,
+            )
+        wrong_hours = pd.DataFrame([{column: 0 for column in FEATURE_COLUMNS}] * 24)
+        with self.assertRaisesRegex(ValueError, "ordered by hour"):
+            predict_daily_demand(object(), wrong_hours)
 
     def test_loader_rejects_missing_and_incompatible_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:

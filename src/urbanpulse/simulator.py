@@ -81,6 +81,31 @@ def build_scenario_features(
     return pd.DataFrame([row], columns=FEATURE_COLUMNS)
 
 
+def build_daily_scenario_features(
+    scenario_date: date,
+    *,
+    temperature_c: float,
+    apparent_temperature_c: float,
+    humidity_percent: float,
+    wind_speed_dataset_units: float,
+    weathersit: int,
+    holiday: bool,
+) -> pd.DataFrame:
+    """Build one chronologically ordered feature row for every hour of a day."""
+    features = build_scenario_features(
+        scenario_date,
+        0,
+        temperature_c=temperature_c,
+        apparent_temperature_c=apparent_temperature_c,
+        humidity_percent=humidity_percent,
+        wind_speed_dataset_units=wind_speed_dataset_units,
+        weathersit=weathersit,
+        holiday=holiday,
+    ).loc[np.repeat(0, 24)].reset_index(drop=True)
+    features["hr"] = np.arange(24, dtype=int)
+    return features
+
+
 def load_simulator_model(path: Path = DEFAULT_MODEL_PATH) -> Pipeline:
     """Load and verify the persisted, fully fitted Random Forest pipeline."""
     path = Path(path)
@@ -103,3 +128,17 @@ def predict_hourly_demand(model: Pipeline, features: pd.DataFrame) -> float:
     if not np.isfinite(prediction):
         raise ValueError("The model returned a non-finite prediction.")
     return max(0.0, prediction)
+
+
+def predict_daily_demand(model: Pipeline, features: pd.DataFrame) -> pd.DataFrame:
+    """Predict all 24 hours in one model call and clamp negative estimates."""
+    if tuple(features.columns) != FEATURE_COLUMNS or len(features) != 24:
+        raise ValueError("features must contain 24 rows with the simulator feature schema.")
+    if features["hr"].tolist() != list(range(24)):
+        raise ValueError("features must be ordered by hour from 0 through 23.")
+    predictions = np.asarray(model.predict(features), dtype=float)
+    if predictions.shape != (24,) or not np.isfinite(predictions).all():
+        raise ValueError("The model must return 24 finite hourly predictions.")
+    return pd.DataFrame(
+        {"hr": np.arange(24, dtype=int), "demand_estimated": np.maximum(predictions, 0.0)}
+    )

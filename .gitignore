@@ -44,6 +44,9 @@ Thumbs.db
 !/reports/model_comparison/
 /reports/model_comparison/*
 !/reports/model_comparison/*.csv
+!/reports/interpretability/
+/reports/interpretability/*
+!/reports/interpretability/*.csv
 /models/*
 !/models/.gitkeep
 

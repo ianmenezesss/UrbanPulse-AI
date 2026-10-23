@@ -37,6 +37,7 @@ urbanpulse-random-forest = "urbanpulse.ml.random_forest:main"
 urbanpulse-temporal-validation = "urbanpulse.ml.temporal_validation:main"
 urbanpulse-model-comparison = "urbanpulse.ml.model_comparison:main"
 urbanpulse-train-random-forest = "urbanpulse.ml.train_artifact:main"
+urbanpulse-interpretability = "urbanpulse.ml.interpretability:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
