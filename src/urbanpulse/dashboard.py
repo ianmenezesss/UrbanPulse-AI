@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from plotly.graph_objects import Figure
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from urbanpulse.dashboard_data import (
     DEFAULT_DATA_PATH,
@@ -105,6 +106,24 @@ def load_cached_simulator_model(
     from urbanpulse.simulator import load_simulator_model
 
     return load_simulator_model(Path(path))
+
+
+@st.cache_resource(show_spinner="Preparando recursos do dashboard…")
+def prepare_deployment_resources(
+    model_url: str | None,
+    model_sha256: str | None,
+    metadata_url: str | None,
+    metadata_sha256: str | None,
+):
+    """Prepare missing deployment resources once per Streamlit process."""
+    from urbanpulse.cloud_resources import prepare_cloud_resources
+
+    return prepare_cloud_resources(
+        model_url=model_url,
+        model_sha256=model_sha256,
+        metadata_url=metadata_url,
+        metadata_sha256=metadata_sha256,
+    )
 
 
 def _style_figure(figure: Figure, *, height: int | None = None) -> Figure:
@@ -574,8 +593,11 @@ def _show_simulator() -> None:
         "com o Random Forest já treinado."
     )
     if not DEFAULT_MODEL_PATH.is_file():
-        st.warning("O modelo do simulador ainda não foi gerado.")
-        st.markdown("Na raiz do projeto, instale as dependências de ML e gere o artefato:")
+        st.warning("O artefato do simulador não está disponível neste ambiente.")
+        st.markdown(
+            "Localmente, gere-o com as dependências de ML. No Community Cloud, configure as URLs "
+            "e os hashes SHA-256 dos arquivos confiáveis conforme a seção de publicação do README."
+        )
         st.code('python -m pip install -e ".[ml,dashboard]"\nurbanpulse-train-random-forest', language="bash")
         return
     metadata_path = DEFAULT_MODEL_PATH.with_name(f"{DEFAULT_MODEL_PATH.name}.metadata.json")
@@ -794,6 +816,28 @@ def _show_interpretability() -> None:
 
 
 def main() -> None:
+    try:
+        cloud_settings = st.secrets.get("cloud_resources", {})
+    except StreamlitSecretNotFoundError:
+        cloud_settings = {}
+    try:
+        resources = prepare_deployment_resources(
+            cloud_settings.get("model_url"),
+            cloud_settings.get("model_sha256"),
+            cloud_settings.get("metadata_url"),
+            cloud_settings.get("metadata_sha256"),
+        )
+        if resources.available_reports != ("final_metrics", "temporal_validation", "interpretability"):
+            missing = sorted(
+                {"final_metrics", "temporal_validation", "interpretability"}
+                - set(resources.available_reports)
+            )
+            st.sidebar.warning(
+                "Relatórios ausentes: " + ", ".join(missing) + ". Consulte os comandos no README."
+            )
+    except (OSError, ValueError, RuntimeError) as exc:
+        st.error(f"Não foi possível preparar os recursos remotos: {exc}")
+
     st.sidebar.markdown("## UrbanPulse AI")
     st.sidebar.caption("Explore os dados, a avaliação e os cenários")
     page = st.sidebar.radio(

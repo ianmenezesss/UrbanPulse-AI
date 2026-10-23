@@ -1,0 +1,3 @@
+# Streamlit Community Cloud: select Python 3.12 in Advanced settings.
+# Editable install includes the local package and pins its Cloud runtime dependencies.
+-e .[cloud]

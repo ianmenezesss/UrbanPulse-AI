@@ -341,16 +341,63 @@ Inicie o Streamlit:
 
     python -m streamlit run src/urbanpulse/dashboard.py
 
-Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral tem quatro áreas:
+Abra o endereço mostrado no terminal, normalmente http://localhost:8501. A navegação lateral tem cinco áreas:
 
 - **Visão geral:** indicadores atuais e exploração da demanda; os filtros de ano e tipo de dia continuam disponíveis.
 - **Modelos de Machine Learning:** MAE, RMSE e R² dos quatro modelos no teste final dos últimos 20%. Esse teste já foi consultado na comparação entre modelos; não o use para novas decisões nem o interprete como avaliação independente. As métricas são retrospectivas e usam clima histórico observado na hora prevista.
 - **Validação temporal:** resultados fora da amostra de Ridge e Random Forest em cinco janelas dentro dos 80% iniciais. Também usam clima histórico observado; não representam desempenho com previsão meteorológica futura.
 - **Simulador de demanda:** estima aluguéis por hora com o pipeline Random Forest salvo e condições informadas pelo usuário.
+- **Interpretabilidade:** apresenta Permutation Importance calculada nas janelas de validação dos 80% iniciais; importância representa associação preditiva, não causalidade.
 
 MAE e RMSE são erros em aluguéis por hora, então valores menores indicam previsões mais próximas; RMSE dá peso maior a erros grandes. R² compara a previsão com uma referência baseada na média e pode ser negativo. Na validação temporal, as curvas por janela mostram estabilidade entre períodos, pontos próximos à diagonal representam previsões próximas dos valores reais, e erro negativo indica subestimação. O painel apenas lê os relatórios: ele não treina modelos. Se os CSVs estiverem ausentes, as respectivas áreas mostram o comando para gerá-los.
 
 O uso de variáveis meteorológicas nos modelos pressupõe previsões disponíveis para cada hora futura. As avaliações atuais usam condições observadas no dataset e, portanto, não medem o desempenho com previsões meteorológicas reais. Em operação, não use observações meteorológicas posteriores à hora prevista.
+
+### Publicação no Streamlit Community Cloud
+
+O deploy usa Python 3.12 e as dependências diretas fixadas em `requirements.txt`; a linha `-e .[cloud]` instala o pacote `urbanpulse` deste repositório junto com o runtime do dashboard. Os relatórios CSV exigidos pelas páginas de modelos, validação temporal e interpretabilidade já estão versionados em `reports/`; o dashboard valida os arquivos existentes e não os recalcula durante a inicialização.
+
+Para preparar recursos sem uma etapa manual de shell no deploy, o dashboard chama `prepare_cloud_resources()` através de `st.cache_resource`: em cada processo frio ele baixa o arquivo oficial `hour.csv` se estiver ausente, cria `data/processed/hour.parquet` com a etapa de preparação existente e valida os relatórios presentes. A rotina é idempotente, não altera o CSV bruto e não treina modelos. Se o processo for reiniciado e o armazenamento local não estiver disponível, os recursos ausentes serão preparados novamente.
+
+Para executar o mesmo bootstrap manualmente (por exemplo, para verificar um ambiente antes do deploy), instale o extra Cloud e rode o script na raiz do repositório:
+
+```bash
+python -m pip install -r requirements.txt
+python scripts/prepare_cloud_resources.py
+```
+
+O artefato `random_forest.joblib` (~54,9 MB) e `random_forest.joblib.metadata.json` não são colocados no Git. Publique ambos como assets de uma GitHub Release confiável. Gere os hashes localmente, a partir dos arquivos que serão anexados:
+
+```powershell
+Get-FileHash models/random_forest.joblib -Algorithm SHA256
+Get-FileHash models/random_forest.joblib.metadata.json -Algorithm SHA256
+```
+
+```bash
+sha256sum models/random_forest.joblib models/random_forest.joblib.metadata.json
+```
+
+Em **App settings → Secrets** no Community Cloud, forneça URLs HTTPS públicas e os hashes SHA-256 obtidos de uma fonte confiável. Exemplo de configuração TOML (substitua os valores; não salve o arquivo de secrets no repositório):
+
+```toml
+[cloud_resources]
+model_url = "https://github.com/OWNER/REPOSITORY/releases/download/TAG/random_forest.joblib"
+model_sha256 = "<sha256-do-joblib>"
+metadata_url = "https://github.com/OWNER/REPOSITORY/releases/download/TAG/random_forest.joblib.metadata.json"
+metadata_sha256 = "<sha256-do-manifest>"
+```
+
+O bootstrap limita downloads, exige HTTPS e verifica separadamente os dois hashes antes de instalar os arquivos. Também confere a compatibilidade e o hash interno do manifesto. O pipeline só é desserializado quando o simulador é usado, através do carregador em cache existente. `joblib` pode executar código ao desserializar; publique e carregue somente artefatos de uma origem confiável. O arquivo local `.streamlit/secrets.toml` está ignorado pelo Git.
+
+Passos para publicar:
+
+1. Envie o repositório ao GitHub com `requirements.txt`, `.streamlit/config.toml`, `src/`, os sete relatórios CSV exigidos e a documentação. Não adicione `data/` nem `models/` ao Git.
+2. Crie uma GitHub Release e anexe o joblib e o manifesto correspondentes. Registre os hashes em um gerenciador confiável e configure os quatro campos de `cloud_resources` nos secrets do app.
+3. Em [share.streamlit.io](https://share.streamlit.io), crie um app selecionando o repositório, a branch e `src/urbanpulse/dashboard.py` como caminho do arquivo principal.
+4. Em **Advanced settings**, selecione Python 3.12 e cole a configuração `cloud_resources` no campo **Secrets**. Salve e inicie o deploy.
+5. Abra a URL criada e confira Visão geral, Modelos de Machine Learning, Validação temporal, Simulador de demanda e Interpretabilidade. No primeiro início, aguarde a preparação dos dados e a transferência verificada do modelo.
+
+O CSV UCI tem cerca de 1,16 MB e o Parquet local atual cerca de 0,40 MB; os relatórios são pequenos. O modelo requer uma transferência de aproximadamente 55 MB a cada inicialização fria quando o sistema de arquivos local não persistir. Isso é viável em armazenamento, mas a memória real do pipeline carregado não foi medida no Community Cloud. A [documentação de limites da plataforma](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) informa valores aproximados de 690 MB–2,7 GB de memória e até 50 GB de armazenamento, observados em fevereiro de 2024, e ressalva que podem mudar; faça um deploy de smoke test e confira os recursos antes de divulgar. O manifesto exige versões exatas de Python, scikit-learn, pandas e joblib: selecione Python 3.12 e mantenha os pins do Cloud alinhados. Se a versão patch do Python na plataforma divergir da registrada no manifesto, o simulador recusará o artefato; nesse caso será preciso gerar e publicar um artefato confiável no runtime compatível, mantendo o mesmo split, features e parâmetros.
 
 ### Local dashboard
 Install the dashboard and ML extras in the project virtual environment (ML is needed to generate the final-test report):
@@ -377,6 +424,52 @@ Open the address printed in the terminal, usually http://localhost:8501. The sid
 MAE and RMSE are errors in rentals per hour, so lower values mean closer predictions; RMSE gives more weight to large errors. R² compares predictions with a mean-based reference and may be negative. In temporal validation, curves across windows show stability over time, points near the diagonal indicate predictions near actual values, and a negative error means underprediction. The dashboard only reads reports and never trains models. If a report CSV is missing, its area shows the command to generate it. To capture screenshots, open each area in the browser and use your operating system capture tool; if screenshots are added to the portfolio, save optimized images under `docs/images/` and avoid large raw files.
 
 Weather predictors assume forecasts are available for each future hour. Current evaluations use observed dataset conditions, so they do not measure performance with real weather forecasts. In operation, do not use weather observations made after the target hour.
+
+### Deploy on Streamlit Community Cloud
+
+The deployment selects Python 3.12 and uses the direct dependency pins in `requirements.txt`; `-e .[cloud]` installs this repository's local `urbanpulse` package and the dashboard runtime. The CSV reports required by the model, temporal validation, and interpretability pages are already tracked under `reports/`; the dashboard validates existing files and does not recalculate them at startup.
+
+To prepare resources without a manual shell step during deployment, the dashboard calls `prepare_cloud_resources()` through `st.cache_resource`: on each cold process it downloads the official `hour.csv` if missing, creates `data/processed/hour.parquet` with the existing preparation step, and validates available reports. This is idempotent, leaves the raw CSV unchanged, and does not train a model. If the process restarts and local storage is unavailable, missing resources are prepared again.
+
+To run the same bootstrap manually (for example, to check an environment before deployment), install the Cloud extra and run the script from the repository root:
+
+```bash
+python -m pip install -r requirements.txt
+python scripts/prepare_cloud_resources.py
+```
+
+The `random_forest.joblib` artifact (~54.9 MB) and `random_forest.joblib.metadata.json` are not committed to Git. Publish both as assets in a trusted GitHub Release. Calculate hashes locally from the exact files to upload:
+
+```powershell
+Get-FileHash models/random_forest.joblib -Algorithm SHA256
+Get-FileHash models/random_forest.joblib.metadata.json -Algorithm SHA256
+```
+
+```bash
+sha256sum models/random_forest.joblib models/random_forest.joblib.metadata.json
+```
+
+In Community Cloud **App settings → Secrets**, provide public HTTPS URLs and SHA-256 pins obtained from a trusted source. Example TOML (replace the values; do not commit a secrets file):
+
+```toml
+[cloud_resources]
+model_url = "https://github.com/OWNER/REPOSITORY/releases/download/TAG/random_forest.joblib"
+model_sha256 = "<joblib-sha256>"
+metadata_url = "https://github.com/OWNER/REPOSITORY/releases/download/TAG/random_forest.joblib.metadata.json"
+metadata_sha256 = "<manifest-sha256>"
+```
+
+Bootstrap bounds download sizes, requires HTTPS, and verifies both hashes independently before installing the files. It also checks manifest compatibility and the artifact hash recorded inside the manifest. The pipeline is deserialized only when the simulator is used, through the existing cached loader. `joblib` can execute code during deserialization; publish and load artifacts only from a trusted source. Local `.streamlit/secrets.toml` is Git-ignored.
+
+Deployment steps:
+
+1. Push the repository to GitHub with `requirements.txt`, `.streamlit/config.toml`, `src/`, the seven required CSV reports, and documentation. Do not add `data/` or `models/` to Git.
+2. Create a GitHub Release and attach the matching joblib and manifest. Record their hashes in a trusted manager and configure all four `cloud_resources` fields in the app secrets.
+3. At [share.streamlit.io](https://share.streamlit.io), create an app by selecting the repository, branch, and `src/urbanpulse/dashboard.py` as the entrypoint.
+4. In **Advanced settings**, select Python 3.12 and paste the `cloud_resources` TOML into **Secrets**. Save and deploy.
+5. Open the generated URL and inspect Overview, Machine Learning models, Temporal validation, Demand simulator, and Interpretability. Allow the first run to prepare the data and transfer the verified model.
+
+The UCI CSV is about 1.16 MB and the current local Parquet about 0.40 MB; the reports are small. The model needs an approximately 55 MB transfer on each cold start if local files do not persist. Storage should be manageable, but memory use after loading the pipeline has not been measured on Community Cloud. The [platform limits documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) gives approximate values of 690 MB–2.7 GB memory and up to 50 GB storage, observed in February 2024, and notes they can change; run a deployment smoke test and inspect resource use before sharing it. The manifest requires exact Python, scikit-learn, pandas, and joblib versions: select Python 3.12 and keep Cloud pins aligned. If the platform's Python patch version differs from the one recorded in the manifest, the simulator will reject the artifact; publish a trusted artifact built in a compatible runtime while preserving the same split, features, and parameters.
 
 ### Simulador de demanda
 

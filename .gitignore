@@ -54,6 +54,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+/.streamlit/secrets.toml
 *.pem
 *.key
 
