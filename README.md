@@ -366,16 +366,14 @@ python -m pip install -r requirements.txt
 python scripts/prepare_cloud_resources.py
 ```
 
-O artefato `random_forest.joblib` (~54,9 MB) e `random_forest.joblib.metadata.json` não são colocados no Git. Publique ambos como assets de uma GitHub Release confiável. Gere os hashes localmente, a partir dos arquivos que serão anexados:
+O artefato `random_forest.joblib` (~54,9 MB) e o manifesto `random_forest.joblib.metadata.json` não são colocados no Git. Anexe exatamente esses dois arquivos à GitHub Release. Gere os quatro valores dos Secrets a partir dos arquivos locais e da URL base da Release já criada:
 
 ```powershell
-Get-FileHash models/random_forest.joblib -Algorithm SHA256
-Get-FileHash models/random_forest.joblib.metadata.json -Algorithm SHA256
+python scripts/generate_cloud_secrets.py `
+  --release-base-url "https://github.com/OWNER/REPOSITORY/releases/download/TAG"
 ```
 
-```bash
-sha256sum models/random_forest.joblib models/random_forest.joblib.metadata.json
-```
+Substitua `OWNER/REPOSITORY/TAG` pelos valores reais, sem incluir nome de arquivo ao final. O comando imprime TOML para colar nos Secrets. `model_sha256` é o hash do joblib; `metadata_sha256` é calculado sobre os bytes do arquivo JSON completo. O `artifact_sha256` dentro do manifesto é uma terceira referência e deve corresponder ao hash do joblib; ele não substitui o hash externo do manifesto.
 
 Em **App settings → Secrets** no Community Cloud, forneça URLs HTTPS públicas e os hashes SHA-256 obtidos de uma fonte confiável. Exemplo de configuração TOML (substitua os valores; não salve o arquivo de secrets no repositório):
 
@@ -389,6 +387,17 @@ metadata_sha256 = "<sha256-do-manifest>"
 
 O bootstrap limita downloads, exige HTTPS e verifica separadamente os dois hashes antes de instalar os arquivos. Também confere a compatibilidade e o hash interno do manifesto. O pipeline só é desserializado quando o simulador é usado, através do carregador em cache existente. `joblib` pode executar código ao desserializar; publique e carregue somente artefatos de uma origem confiável. O arquivo local `.streamlit/secrets.toml` está ignorado pelo Git.
 
+Para criar a Release manualmente com GitHub CLI (`gh`), depois de escolher uma tag:
+
+```powershell
+$tag = "urbanpulse-v0.1.0"
+gh release create $tag `
+  "models/random_forest.joblib" `
+  "models/random_forest.joblib.metadata.json" `
+  --title "UrbanPulse AI $tag" `
+  --notes "Pipeline Random Forest e manifesto de integridade para o simulador."
+```
+
 Passos para publicar:
 
 1. Envie o repositório ao GitHub com `requirements.txt`, `.streamlit/config.toml`, `src/`, os sete relatórios CSV exigidos e a documentação. Não adicione `data/` nem `models/` ao Git.
@@ -397,7 +406,7 @@ Passos para publicar:
 4. Em **Advanced settings**, selecione Python 3.12 e cole a configuração `cloud_resources` no campo **Secrets**. Salve e inicie o deploy.
 5. Abra a URL criada e confira Visão geral, Modelos de Machine Learning, Validação temporal, Simulador de demanda e Interpretabilidade. No primeiro início, aguarde a preparação dos dados e a transferência verificada do modelo.
 
-O CSV UCI tem cerca de 1,16 MB e o Parquet local atual cerca de 0,40 MB; os relatórios são pequenos. O modelo requer uma transferência de aproximadamente 55 MB a cada inicialização fria quando o sistema de arquivos local não persistir. Isso é viável em armazenamento, mas a memória real do pipeline carregado não foi medida no Community Cloud. A [documentação de limites da plataforma](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) informa valores aproximados de 690 MB–2,7 GB de memória e até 50 GB de armazenamento, observados em fevereiro de 2024, e ressalva que podem mudar; faça um deploy de smoke test e confira os recursos antes de divulgar. O manifesto exige versões exatas de Python, scikit-learn, pandas e joblib: selecione Python 3.12 e mantenha os pins do Cloud alinhados. Se a versão patch do Python na plataforma divergir da registrada no manifesto, o simulador recusará o artefato; nesse caso será preciso gerar e publicar um artefato confiável no runtime compatível, mantendo o mesmo split, features e parâmetros.
+O CSV UCI tem cerca de 1,16 MB e o Parquet local atual cerca de 0,40 MB; os relatórios são pequenos. O modelo requer uma transferência de aproximadamente 55 MB a cada inicialização fria quando o sistema de arquivos local não persistir. Isso é viável em armazenamento, mas a memória real do pipeline carregado não foi medida no Community Cloud. A [documentação de limites da plataforma](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) informa valores aproximados de 690 MB–2,7 GB de memória e até 50 GB de armazenamento, observados em fevereiro de 2024, e ressalva que podem mudar; faça um deploy de smoke test e confira os recursos antes de divulgar. O manifesto aceita diferenças de patch do Python dentro da mesma série major/minor (por exemplo, 3.12.10 e 3.12.12). Scikit-learn, pandas e joblib continuam exigindo igualdade exata com as versões registradas; mantenha os pins do Cloud alinhados. Diferenças de versão minor ou major do Python são rejeitadas.
 
 ### Local dashboard
 Install the dashboard and ML extras in the project virtual environment (ML is needed to generate the final-test report):
@@ -438,16 +447,14 @@ python -m pip install -r requirements.txt
 python scripts/prepare_cloud_resources.py
 ```
 
-The `random_forest.joblib` artifact (~54.9 MB) and `random_forest.joblib.metadata.json` are not committed to Git. Publish both as assets in a trusted GitHub Release. Calculate hashes locally from the exact files to upload:
+The `random_forest.joblib` artifact (~54.9 MB) and `random_forest.joblib.metadata.json` manifest are not committed to Git. Attach exactly these two files to a trusted GitHub Release. Generate all four Secret values from the local files and the base URL of the created Release:
 
 ```powershell
-Get-FileHash models/random_forest.joblib -Algorithm SHA256
-Get-FileHash models/random_forest.joblib.metadata.json -Algorithm SHA256
+python scripts/generate_cloud_secrets.py `
+  --release-base-url "https://github.com/OWNER/REPOSITORY/releases/download/TAG"
 ```
 
-```bash
-sha256sum models/random_forest.joblib models/random_forest.joblib.metadata.json
-```
+Replace `OWNER/REPOSITORY/TAG` with the real values, without appending a filename. The command prints TOML to paste into Secrets. `model_sha256` hashes the joblib; `metadata_sha256` hashes the complete JSON file bytes. The `artifact_sha256` inside the manifest is a separate reference that must match the joblib hash; it does not replace the external manifest hash.
 
 In Community Cloud **App settings → Secrets**, provide public HTTPS URLs and SHA-256 pins obtained from a trusted source. Example TOML (replace the values; do not commit a secrets file):
 
@@ -461,6 +468,17 @@ metadata_sha256 = "<manifest-sha256>"
 
 Bootstrap bounds download sizes, requires HTTPS, and verifies both hashes independently before installing the files. It also checks manifest compatibility and the artifact hash recorded inside the manifest. The pipeline is deserialized only when the simulator is used, through the existing cached loader. `joblib` can execute code during deserialization; publish and load artifacts only from a trusted source. Local `.streamlit/secrets.toml` is Git-ignored.
 
+To create the Release manually with GitHub CLI (`gh`), after choosing a tag:
+
+```powershell
+$tag = "urbanpulse-v0.1.0"
+gh release create $tag `
+  "models/random_forest.joblib" `
+  "models/random_forest.joblib.metadata.json" `
+  --title "UrbanPulse AI $tag" `
+  --notes "Random Forest pipeline and integrity manifest for the simulator."
+```
+
 Deployment steps:
 
 1. Push the repository to GitHub with `requirements.txt`, `.streamlit/config.toml`, `src/`, the seven required CSV reports, and documentation. Do not add `data/` or `models/` to Git.
@@ -469,7 +487,7 @@ Deployment steps:
 4. In **Advanced settings**, select Python 3.12 and paste the `cloud_resources` TOML into **Secrets**. Save and deploy.
 5. Open the generated URL and inspect Overview, Machine Learning models, Temporal validation, Demand simulator, and Interpretability. Allow the first run to prepare the data and transfer the verified model.
 
-The UCI CSV is about 1.16 MB and the current local Parquet about 0.40 MB; the reports are small. The model needs an approximately 55 MB transfer on each cold start if local files do not persist. Storage should be manageable, but memory use after loading the pipeline has not been measured on Community Cloud. The [platform limits documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) gives approximate values of 690 MB–2.7 GB memory and up to 50 GB storage, observed in February 2024, and notes they can change; run a deployment smoke test and inspect resource use before sharing it. The manifest requires exact Python, scikit-learn, pandas, and joblib versions: select Python 3.12 and keep Cloud pins aligned. If the platform's Python patch version differs from the one recorded in the manifest, the simulator will reject the artifact; publish a trusted artifact built in a compatible runtime while preserving the same split, features, and parameters.
+The UCI CSV is about 1.16 MB and the current local Parquet about 0.40 MB; the reports are small. The model needs an approximately 55 MB transfer on each cold start if local files do not persist. Storage should be manageable, but memory use after loading the pipeline has not been measured on Community Cloud. The [platform limits documentation](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app#resource-limits) gives approximate values of 690 MB–2.7 GB memory and up to 50 GB storage, observed in February 2024, and notes they can change; run a deployment smoke test and inspect resource use before sharing it. The manifest accepts Python patch updates within the same major/minor series (for example, 3.12.10 and 3.12.12). Scikit-learn, pandas, and joblib still require exact version matches; keep Cloud pins aligned. Python minor or major differences are rejected.
 
 ### Simulador de demanda
 
